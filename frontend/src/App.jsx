@@ -1,0 +1,35 @@
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Hero from './components/Hero';
+import ProductCatalog from './pages/ProductCatalog';
+import Checkout from './pages/Checkout';
+import OrderTracking from './pages/OrderTracking';
+import Navbar from './components/Navbar';
+import Cart from './components/Cart';
+
+function App() {
+  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  return (
+    <Router>
+      <div className="min-h-screen flex flex-col relative overflow-hidden">
+        {/* Background Particles/Stars base layer could go here */}
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#1a1a2e] via-[#0a0a0f] to-black -z-50"></div>
+        
+        <Navbar onCartClick={() => setIsCartOpen(true)} />
+        
+        <main className="flex-grow pt-20">
+          <Routes>
+            <Route path="/" element={<><Hero /><ProductCatalog /></>} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/tracking" element={<OrderTracking />} />
+          </Routes>
+        </main>
+        
+        <Cart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      </div>
+    </Router>
+  );
+}
+
+export default App;
