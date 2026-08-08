@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images } from 'lucide-react';
 
 const STATUSES = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
 
@@ -42,6 +42,8 @@ const AdminPanel = () => {
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [categorySuccess, setCategorySuccess] = useState('');
+  const [categoryError, setCategoryError] = useState('');
   const [editingCategory, setEditingCategory] = useState(null);
   const [categoryActionLoading, setCategoryActionLoading] = useState(false);
 
@@ -49,6 +51,7 @@ const AdminPanel = () => {
   const [newProduct, setNewProduct] = useState({
     name: '',
     category: 'Flower Pots',
+    customCategory: '',
     description: '',
     originalPrice: '',
     discountedPrice: '',
@@ -56,7 +59,9 @@ const AdminPanel = () => {
     badge: '',
     stock: '100'
   });
-  const [imageFile, setImageFile] = useState(null);
+  const [imageUrlsText, setImageUrlsText] = useState('');
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imageTab, setImageTab] = useState('urls'); // 'urls' | 'files'
   const [addProductSuccess, setAddProductSuccess] = useState('');
   const [addProductError, setAddProductError] = useState('');
   const [addProductLoading, setAddProductLoading] = useState(false);
@@ -154,59 +159,71 @@ const AdminPanel = () => {
   // Category CRUD Handlers
   const handleAddCategory = async (e) => {
     e.preventDefault();
-    if (!newCategoryName) return;
+    if (!newCategoryName.trim()) return;
     setCategoryActionLoading(true);
+    setCategoryError('');
+    setCategorySuccess('');
     try {
       const res = await fetch('http://localhost:5000/api/admin/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCategoryName })
+        body: JSON.stringify({ name: newCategoryName.trim() })
       });
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCategorySuccess(`Category "${newCategoryName}" added successfully! 🎉`);
         setNewCategoryName('');
         fetchCategories();
+      } else {
+        setCategoryError(data.error || 'Failed to add category');
       }
-    } catch {}
+    } catch {
+      setCategoryError('Could not connect to server.');
+    }
     setCategoryActionLoading(false);
   };
 
   const handleUpdateCategory = async (id, newName) => {
-    if (!newName) return;
+    if (!newName.trim()) return;
     setCategoryActionLoading(true);
     try {
       const res = await fetch(`http://localhost:5000/api/admin/categories/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName })
+        body: JSON.stringify({ name: newName.trim() })
       });
       if (res.ok) {
         setEditingCategory(null);
         fetchCategories();
-        fetchProducts(); // Refresh products as their category names might have changed
+        fetchProducts();
       }
     } catch {}
     setCategoryActionLoading(false);
   };
 
   const handleDeleteCategory = async (id) => {
-    if (!confirm('Are you sure you want to delete this category? Products in it will become Uncategorized.')) return;
+    if (!window.confirm('Are you sure you want to delete this category? Products in it will become Uncategorized.')) return;
     setCategoryActionLoading(true);
     try {
       const res = await fetch(`http://localhost:5000/api/admin/categories/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchCategories();
-        fetchProducts(); // Refresh products
+        fetchProducts();
       }
     } catch {}
     setCategoryActionLoading(false);
   };
 
-  // Add Product Submit
+  // Add Product Submit (supports MULTIPLE IMAGES via URLs or file upload)
   const handleAddProduct = async (e) => {
     e.preventDefault();
     setAddProductLoading(true);
     setAddProductError('');
     setAddProductSuccess('');
+
+    const targetCategory = newProduct.category === '__NEW__'
+      ? newProduct.customCategory.trim()
+      : newProduct.category.trim();
 
     if (!newProduct.name || !newProduct.originalPrice || !newProduct.discountedPrice) {
       setAddProductError('Please fill in Name, Original Price, and Discounted Price.');
@@ -214,30 +231,61 @@ const AdminPanel = () => {
       return;
     }
 
+    if (!targetCategory) {
+      setAddProductError('Please select or specify a category.');
+      setAddProductLoading(false);
+      return;
+    }
+
     try {
-      const formData = new FormData();
-      formData.append('name', newProduct.name);
-      formData.append('category', newProduct.category);
-      formData.append('description', newProduct.description);
-      formData.append('originalPrice', Number(newProduct.originalPrice));
-      formData.append('discountedPrice', Number(newProduct.discountedPrice));
-      if (newProduct.discount) formData.append('discount', Number(newProduct.discount));
-      formData.append('badge', newProduct.badge);
-      formData.append('stock', Number(newProduct.stock || 100));
-      if (imageFile) {
-        formData.append('image', imageFile);
+      let res, data;
+
+      // Parse pasted image URLs from textarea
+      const parsedUrls = imageUrlsText
+        .split('\n')
+        .map(u => u.trim())
+        .filter(u => u.startsWith('http'));
+
+      if (imageTab === 'files' && imageFiles && imageFiles.length > 0) {
+        // Send as FormData (file upload)
+        const formData = new FormData();
+        formData.append('name', newProduct.name);
+        formData.append('category', targetCategory);
+        formData.append('description', newProduct.description);
+        formData.append('originalPrice', Number(newProduct.originalPrice));
+        formData.append('discountedPrice', Number(newProduct.discountedPrice));
+        if (newProduct.discount) formData.append('discount', Number(newProduct.discount));
+        formData.append('badge', newProduct.badge || '');
+        formData.append('stock', Number(newProduct.stock || 100));
+        Array.from(imageFiles).forEach(file => formData.append('productImages', file));
+        res = await fetch('http://localhost:5000/api/admin/products', { method: 'POST', body: formData });
+      } else {
+        // Send as JSON (URL-based images, most reliable)
+        res = await fetch('http://localhost:5000/api/admin/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newProduct.name,
+            category: targetCategory,
+            description: newProduct.description,
+            originalPrice: Number(newProduct.originalPrice),
+            discountedPrice: Number(newProduct.discountedPrice),
+            discount: newProduct.discount ? Number(newProduct.discount) : undefined,
+            badge: newProduct.badge || '',
+            stock: Number(newProduct.stock || 100),
+            imageUrls: parsedUrls.join(','),
+          }),
+        });
       }
 
-      const res = await fetch('http://localhost:5000/api/admin/products', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
+      data = await res.json();
       if (data.success) {
-        setAddProductSuccess(`Product "${newProduct.name}" added successfully! 🎉`);
+        const imgCount = imageTab === 'files' ? (imageFiles?.length || 0) : parsedUrls.length;
+        setAddProductSuccess(`Product "${newProduct.name}" added with ${imgCount} image(s)! 🎉`);
         setNewProduct({
           name: '',
-          category: 'Flower Pots',
+          category: categories.length > 0 ? categories[0].name : 'Flower Pots',
+          customCategory: '',
           description: '',
           originalPrice: '',
           discountedPrice: '',
@@ -245,10 +293,12 @@ const AdminPanel = () => {
           badge: '',
           stock: '100'
         });
-        setImageFile(null);
-        const fileInput = document.getElementById('productImage');
+        setImageFiles([]);
+        setImageUrlsText('');
+        const fileInput = document.getElementById('productImagesInput');
         if (fileInput) fileInput.value = '';
         fetchProducts();
+        fetchCategories();
       } else {
         setAddProductError(data.error || 'Failed to add product');
       }
@@ -356,7 +406,7 @@ const AdminPanel = () => {
               Authenticated
             </span>
           </h2>
-          <p className="text-gray-400 text-sm mt-0.5">Manage inventory, products, and customer orders</p>
+          <p className="text-gray-400 text-sm mt-0.5">Manage inventory, categories, products, and customer orders</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -376,7 +426,7 @@ const AdminPanel = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
         <div className="glass-card p-5 flex items-center gap-4">
           <span className="text-3xl">📦</span>
           <div>
@@ -389,6 +439,13 @@ const AdminPanel = () => {
           <div>
             <p className="text-gray-500 text-xs">Live Products</p>
             <p className="text-white font-bold text-2xl">{products.length}</p>
+          </div>
+        </div>
+        <div className="glass-card p-5 flex items-center gap-4">
+          <span className="text-3xl">🏷️</span>
+          <div>
+            <p className="text-gray-500 text-xs">Categories</p>
+            <p className="text-white font-bold text-2xl">{categories.length}</p>
           </div>
         </div>
         <div className="glass-card p-5 flex items-center gap-4">
@@ -536,11 +593,18 @@ const AdminPanel = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {products.map(p => (
                 <div key={p.id} className="glass-card p-4 flex gap-4 items-center relative group">
-                  <div className="w-20 h-20 bg-black/50 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center">
-                    {p.imageUrl ? (
+                  <div className="w-20 h-20 bg-black/50 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center relative">
+                    {p.images && p.images.length > 0 ? (
+                      <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover" />
+                    ) : p.imageUrl ? (
                       <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
                     ) : (
                       <span className="text-3xl">🎆</span>
+                    )}
+                    {p.images && p.images.length > 1 && (
+                      <span className="absolute bottom-1 right-1 bg-black/80 text-festival-gold text-[10px] px-1.5 py-0.5 rounded font-bold">
+                        +{p.images.length - 1} photos
+                      </span>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -568,17 +632,17 @@ const AdminPanel = () => {
         </div>
       )}
 
-      {/* Tab: Categories */}
+      {/* Tab 3: Categories */}
       {activeTab === 'categories' && (
         <div className="space-y-6">
           <div className="glass-card p-6">
             <h3 className="text-xl font-bold text-white mb-4">Add New Category</h3>
-            <form onSubmit={handleAddCategory} className="flex gap-4">
+            <form onSubmit={handleAddCategory} className="flex flex-col sm:flex-row gap-4">
               <input
                 type="text"
                 required
                 className={inputClass}
-                placeholder="Category Name"
+                placeholder="Enter new category name (e.g. Premium Sky Shots)"
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
               />
@@ -587,21 +651,31 @@ const AdminPanel = () => {
                 disabled={categoryActionLoading}
                 className="btn-primary shrink-0 px-6"
               >
-                {categoryActionLoading ? 'Adding...' : 'Add'}
+                {categoryActionLoading ? 'Adding...' : 'Add Category'}
               </button>
             </form>
+            {categorySuccess && (
+              <p className="text-green-400 text-sm mt-3 font-medium bg-green-500/10 border border-green-500/20 px-4 py-2 rounded-xl">
+                {categorySuccess}
+              </p>
+            )}
+            {categoryError && (
+              <p className="text-red-400 text-sm mt-3 font-medium bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl">
+                {categoryError}
+              </p>
+            )}
           </div>
 
           <div className="glass-card p-6">
-            <h3 className="text-xl font-bold text-white mb-4">Manage Categories</h3>
+            <h3 className="text-xl font-bold text-white mb-4">Manage Existing Categories</h3>
             {categoriesLoading ? (
               <p className="text-gray-400">Loading categories...</p>
             ) : categories.length === 0 ? (
-              <p className="text-gray-400">No categories found.</p>
+              <p className="text-gray-400">No categories found in database.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {categories.map(c => (
-                  <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 bg-white/5 border border-white/10 p-4 rounded-xl">
+                  <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/5 border border-white/10 p-4 rounded-xl">
                     {editingCategory?.id === c.id ? (
                       <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full sm:mr-4">
                         <input
@@ -655,7 +729,7 @@ const AdminPanel = () => {
         </div>
       )}
 
-      {/* Tab 3: Add New Product Form */}
+      {/* Tab 4: Add New Product Form */}
       {activeTab === 'add-product' && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -680,6 +754,7 @@ const AdminPanel = () => {
                 />
               </div>
 
+              {/* Category selector or create new */}
               <div className="space-y-1.5">
                 <label className="text-gray-300 text-sm font-medium">Category *</label>
                 <select
@@ -688,26 +763,53 @@ const AdminPanel = () => {
                   onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
                 >
                   {categories.map(c => (
-                    <option key={c.id} value={c.name} className="bg-[#0d0d14]">{c.name}</option>
+                    <option key={c.id || c.name} value={c.name} className="bg-[#0d0d14]">{c.name}</option>
                   ))}
-                  {categories.length === 0 && (
-                    <option value="Uncategorized" className="bg-[#0d0d14]">Uncategorized</option>
-                  )}
+                  <option value="__NEW__" className="bg-[#0d0d14] text-festival-gold font-bold">+ Create Custom Category...</option>
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-gray-300 text-sm font-medium">Badge (Optional)</label>
-                <select
-                  className={inputClass}
-                  value={newProduct.badge}
-                  onChange={(e) => setNewProduct({ ...newProduct, badge: e.target.value })}
-                >
-                  <option value="" className="bg-[#0d0d14]">None</option>
-                  <option value="Best Seller" className="bg-[#0d0d14]">Best Seller</option>
-                  <option value="New" className="bg-[#0d0d14]">New</option>
-                </select>
-              </div>
+              {newProduct.category === '__NEW__' ? (
+                <div className="space-y-1.5">
+                  <label className="text-gray-300 text-sm font-medium">New Category Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    placeholder="e.g. Special Sky Shots"
+                    value={newProduct.customCategory}
+                    onChange={(e) => setNewProduct({ ...newProduct, customCategory: e.target.value })}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <label className="text-gray-300 text-sm font-medium">Badge (Optional)</label>
+                  <select
+                    className={inputClass}
+                    value={newProduct.badge}
+                    onChange={(e) => setNewProduct({ ...newProduct, badge: e.target.value })}
+                  >
+                    <option value="" className="bg-[#0d0d14]">None</option>
+                    <option value="Best Seller" className="bg-[#0d0d14]">Best Seller</option>
+                    <option value="New" className="bg-[#0d0d14]">New</option>
+                  </select>
+                </div>
+              )}
+
+              {newProduct.category === '__NEW__' && (
+                <div className="space-y-1.5">
+                  <label className="text-gray-300 text-sm font-medium">Badge (Optional)</label>
+                  <select
+                    className={inputClass}
+                    value={newProduct.badge}
+                    onChange={(e) => setNewProduct({ ...newProduct, badge: e.target.value })}
+                  >
+                    <option value="" className="bg-[#0d0d14]">None</option>
+                    <option value="Best Seller" className="bg-[#0d0d14]">Best Seller</option>
+                    <option value="New" className="bg-[#0d0d14]">New</option>
+                  </select>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-gray-300 text-sm font-medium">Original MRP Price (₹) *</label>
@@ -735,15 +837,72 @@ const AdminPanel = () => {
                 />
               </div>
 
-              <div className="space-y-1.5 md:col-span-2">
-                <label className="text-gray-300 text-sm font-medium">Upload Image (Optional)</label>
-                <input
-                  type="file"
-                  id="productImage"
-                  accept="image/*"
-                  className={inputClass}
-                  onChange={(e) => setImageFile(e.target.files[0])}
-                />
+              {/* Multiple Images — URL paste OR File upload */}
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-gray-300 text-sm font-medium block">Product Images (Multiple)</label>
+
+                {/* Toggle tabs */}
+                <div className="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('urls')}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      imageTab === 'urls'
+                        ? 'bg-festival-gold text-black'
+                        : 'bg-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    🌐 Paste Image URLs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImageTab('files')}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      imageTab === 'files'
+                        ? 'bg-festival-gold text-black'
+                        : 'bg-white/5 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    💻 Upload from Computer
+                  </button>
+                </div>
+
+                {imageTab === 'urls' && (
+                  <div>
+                    <textarea
+                      rows="4"
+                      className={inputClass}
+                      placeholder={'Paste one image URL per line:\nhttps://example.com/image1.jpg\nhttps://example.com/image2.jpg'}
+                      value={imageUrlsText}
+                      onChange={(e) => setImageUrlsText(e.target.value)}
+                    />
+                    <p className="text-gray-500 text-xs mt-1">Enter one image URL per line. All images will be shown in a carousel on the product card.</p>
+                    {imageUrlsText.split('\n').filter(u => u.trim().startsWith('http')).length > 0 && (
+                      <p className="text-festival-gold text-xs mt-1 font-semibold">
+                        ✓ {imageUrlsText.split('\n').filter(u => u.trim().startsWith('http')).length} image URL(s) ready
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {imageTab === 'files' && (
+                  <div>
+                    <input
+                      type="file"
+                      id="productImagesInput"
+                      accept="image/*"
+                      multiple
+                      className={inputClass}
+                      onChange={(e) => setImageFiles(e.target.files)}
+                    />
+                    <p className="text-gray-500 text-xs mt-1">Hold Ctrl (Windows) or Cmd (Mac) to select multiple files at once.</p>
+                    {imageFiles && imageFiles.length > 0 && (
+                      <p className="text-festival-gold text-xs mt-1 font-semibold">
+                        ✓ {imageFiles.length} file(s) selected
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
@@ -776,7 +935,7 @@ const AdminPanel = () => {
                 disabled={addProductLoading}
                 className="btn-primary w-full py-3 text-base flex items-center justify-center gap-2"
               >
-                {addProductLoading ? 'Adding Product...' : 'Publish Product to Store 🚀'}
+                {addProductLoading ? 'Publishing Product...' : 'Publish Product to Store 🚀'}
               </button>
             </div>
           </form>

@@ -21,13 +21,13 @@ if (!fs.existsSync(uploadsDir)) {
 // Serve uploaded files
 app.use('/uploads', express.static(uploadsDir));
 
-// Multer config
+// Multer config for multiple files
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
-    cb(null, Date.now() + path.extname(file.originalname));
+    cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
   }
 });
 const upload = multer({ storage: storage });
@@ -45,6 +45,64 @@ const pool = mysql.createPool({
   queueLimit: 0
 });
 
+// Helper to ensure database tables exist
+const ensureTablesExist = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        category VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
+        description TEXT,
+        originalPrice DECIMAL(10, 2) NOT NULL,
+        discountedPrice DECIMAL(10, 2) NOT NULL,
+        discount INT NOT NULL,
+        badge VARCHAR(50) DEFAULT NULL,
+        imageUrl TEXT,
+        images JSON,
+        stock INT DEFAULT 100,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id VARCHAR(20) PRIMARY KEY,
+        customerName VARCHAR(255) NOT NULL,
+        mobile VARCHAR(20) NOT NULL,
+        whatsapp VARCHAR(20),
+        address TEXT NOT NULL,
+        landmark VARCHAR(255),
+        city VARCHAR(100) NOT NULL,
+        pincode VARCHAR(20) NOT NULL,
+        items JSON,
+        totalAmount DECIMAL(10, 2) NOT NULL,
+        status VARCHAR(50) DEFAULT 'Order Received',
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Ensure images column exists in products table
+    try {
+      await pool.query('ALTER TABLE products ADD COLUMN images JSON');
+    } catch (e) {
+      // Column already exists
+    }
+  } catch (err) {
+    console.error('Table check error:', err.message);
+  }
+};
+
+ensureTablesExist();
+
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
   try {
@@ -59,6 +117,7 @@ app.get('/api/health', async (req, res) => {
 // ─── Get All Products (with optional category filter) ────────────────────────
 app.get('/api/products', async (req, res) => {
   try {
+    await ensureTablesExist();
     const { category } = req.query;
     let query = 'SELECT * FROM products WHERE stock > 0';
     const params = [];
@@ -68,7 +127,22 @@ app.get('/api/products', async (req, res) => {
     }
     query += ' ORDER BY createdAt DESC';
     const [rows] = await pool.query(query, params);
-    res.json(rows);
+    const products = rows.map(p => {
+      let parsedImages = [];
+      try {
+        parsedImages = typeof p.images === 'string' ? JSON.parse(p.images || '[]') : (p.images || []);
+      } catch {
+        parsedImages = p.imageUrl ? [p.imageUrl] : [];
+      }
+      if (p.imageUrl && !parsedImages.includes(p.imageUrl)) {
+        parsedImages.unshift(p.imageUrl);
+      }
+      return {
+        ...p,
+        images: parsedImages.length > 0 ? parsedImages : (p.imageUrl ? [p.imageUrl] : [])
+      };
+    });
+    res.json(products);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -77,8 +151,19 @@ app.get('/api/products', async (req, res) => {
 // ─── Get Distinct Categories ─────────────────────────────────────────────────
 app.get('/api/categories', async (req, res) => {
   try {
+    await ensureTablesExist();
     const [rows] = await pool.query('SELECT name FROM categories ORDER BY name ASC');
-    const categories = ['All', ...rows.map(r => r.name)];
+    let categoryList = rows.map(r => r.name);
+    
+    // Also include any distinct product categories not yet in categories table
+    const [prodCatRows] = await pool.query('SELECT DISTINCT category FROM products WHERE category IS NOT NULL');
+    prodCatRows.forEach(r => {
+      if (r.category && !categoryList.includes(r.category)) {
+        categoryList.push(r.category);
+      }
+    });
+
+    const categories = ['All', ...categoryList];
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -88,6 +173,7 @@ app.get('/api/categories', async (req, res) => {
 // ─── Admin Categories ─────────────────────────────────────────────────────────
 app.get('/api/admin/categories', async (req, res) => {
   try {
+    await ensureTablesExist();
     const [rows] = await pool.query('SELECT * FROM categories ORDER BY name ASC');
     res.json(rows);
   } catch (error) {
@@ -97,29 +183,34 @@ app.get('/api/admin/categories', async (req, res) => {
 
 app.post('/api/admin/categories', async (req, res) => {
   try {
+    await ensureTablesExist();
     const { name } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
-    const [result] = await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
-    res.json({ success: true, id: result.insertId, message: 'Category added' });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
+    
+    const catName = name.trim();
+    await pool.query('INSERT IGNORE INTO categories (name) VALUES (?)', [catName]);
+    const [rows] = await pool.query('SELECT * FROM categories WHERE name = ?', [catName]);
+    res.json({ success: true, category: rows[0], message: 'Category added successfully' });
   } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Category already exists' });
     res.status(500).json({ error: error.message });
   }
 });
 
 app.put('/api/admin/categories/:id', async (req, res) => {
   try {
+    await ensureTablesExist();
     const { name } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name is required' });
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
     
+    const newName = name.trim();
     const [oldRows] = await pool.query('SELECT name FROM categories WHERE id = ?', [req.params.id]);
     if (oldRows.length === 0) return res.status(404).json({ error: 'Category not found' });
     const oldName = oldRows[0].name;
 
-    await pool.query('UPDATE categories SET name = ? WHERE id = ?', [name, req.params.id]);
-    await pool.query('UPDATE products SET category = ? WHERE category = ?', [name, oldName]);
+    await pool.query('UPDATE categories SET name = ? WHERE id = ?', [newName, req.params.id]);
+    await pool.query('UPDATE products SET category = ? WHERE category = ?', [newName, oldName]);
     
-    res.json({ success: true, message: 'Category updated' });
+    res.json({ success: true, message: 'Category updated successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -127,13 +218,14 @@ app.put('/api/admin/categories/:id', async (req, res) => {
 
 app.delete('/api/admin/categories/:id', async (req, res) => {
   try {
+    await ensureTablesExist();
     const [oldRows] = await pool.query('SELECT name FROM categories WHERE id = ?', [req.params.id]);
     if (oldRows.length > 0) {
       const oldName = oldRows[0].name;
       await pool.query('UPDATE products SET category = ? WHERE category = ?', ['Uncategorized', oldName]);
     }
     await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'Category deleted' });
+    res.json({ success: true, message: 'Category deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -142,13 +234,13 @@ app.delete('/api/admin/categories/:id', async (req, res) => {
 // ─── Create Order ────────────────────────────────────────────────────────────
 app.post('/api/orders', async (req, res) => {
   try {
+    await ensureTablesExist();
     const { customerName, mobile, whatsapp, address, landmark, city, pincode, items, totalAmount } = req.body;
 
     if (!customerName || !mobile || !address || !city || !pincode || !items || !totalAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Generate Order ID: CRK + year + 5-digit random
     const orderId = 'CRK' + new Date().getFullYear() + String(Math.floor(10000 + Math.random() * 90000));
 
     await pool.query(
@@ -167,6 +259,7 @@ app.post('/api/orders', async (req, res) => {
 // ─── Get Order by ID ─────────────────────────────────────────────────────────
 app.get('/api/orders/:id', async (req, res) => {
   try {
+    await ensureTablesExist();
     const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
@@ -192,35 +285,72 @@ app.post('/api/admin/login', (req, res) => {
   }
 });
 
-// ─── Add Product (Admin) ─────────────────────────────────────────────────────
-app.post('/api/admin/products', upload.single('image'), async (req, res) => {
+// ─── Add Product (Admin) with Multiple Images Support ───────────────────────
+app.post('/api/admin/products', upload.any(), async (req, res) => {
   try {
-    const { name, category, description, originalPrice, discountedPrice, discount, badge, stock } = req.body;
-    let imageUrl = req.body.imageUrl || '';
+    await ensureTablesExist();
+    const { name, category, description, originalPrice, discountedPrice, discount, badge, stock, imageUrls } = req.body;
+    
+    let allImages = [];
 
-    if (req.file) {
+    // Process uploaded file images (accepts any field name)
+    if (req.files && req.files.length > 0) {
       const baseUrl = `${req.protocol}://${req.get('host')}`;
-      imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+      req.files.forEach(file => {
+        allImages.push(`${baseUrl}/uploads/${file.filename}`);
+      });
+    }
+
+    // Process additional image URLs passed as text or array
+    if (imageUrls) {
+      let urls = [];
+      if (typeof imageUrls === 'string') {
+        try {
+          const parsed = JSON.parse(imageUrls);
+          urls = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          // Split by newline OR comma
+          urls = imageUrls.split(/[\n,]/).map(u => u.trim()).filter(Boolean);
+        }
+      } else if (Array.isArray(imageUrls)) {
+        urls = imageUrls;
+      }
+      urls.forEach(u => {
+        if (u && u.startsWith('http') && !allImages.includes(u)) allImages.push(u);
+      });
+    }
+
+    // Fallback single imageUrl field if passed
+    if (req.body.imageUrl && !allImages.includes(req.body.imageUrl)) {
+      allImages.unshift(req.body.imageUrl);
     }
     
     if (!name || !originalPrice || !discountedPrice) {
       return res.status(400).json({ error: 'Name, original price, and discounted price are required' });
     }
 
-    const calcDiscount = discount || Math.round(((originalPrice - discountedPrice) / originalPrice) * 100);
+    const mainCategory = (category || 'General').trim();
+    // Auto-create category in categories table if it doesn't exist
+    if (mainCategory) {
+      await pool.query('INSERT IGNORE INTO categories (name) VALUES (?)', [mainCategory]);
+    }
+
+    const calcDiscount = discount ? Number(discount) : Math.round(((originalPrice - discountedPrice) / originalPrice) * 100);
+    const mainImageUrl = allImages.length > 0 ? allImages[0] : '';
 
     const [result] = await pool.query(
-      `INSERT INTO products (name, category, description, originalPrice, discountedPrice, discount, badge, imageUrl, stock)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (name, category, description, originalPrice, discountedPrice, discount, badge, imageUrl, images, stock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        name,
-        category || 'General',
+        name.trim(),
+        mainCategory,
         description || '',
         originalPrice,
         discountedPrice,
         calcDiscount,
         badge || null,
-        imageUrl || '',
+        mainImageUrl,
+        JSON.stringify(allImages),
         stock || 100
       ]
     );
@@ -234,6 +364,7 @@ app.post('/api/admin/products', upload.single('image'), async (req, res) => {
 // ─── Delete Product (Admin) ──────────────────────────────────────────────────
 app.delete('/api/admin/products/:id', async (req, res) => {
   try {
+    await ensureTablesExist();
     await pool.query('DELETE FROM products WHERE id = ?', [req.params.id]);
     res.json({ success: true, message: 'Product deleted successfully' });
   } catch (error) {
@@ -244,6 +375,7 @@ app.delete('/api/admin/products/:id', async (req, res) => {
 // ─── Get All Orders (Admin) ──────────────────────────────────────────────────
 app.get('/api/admin/orders', async (req, res) => {
   try {
+    await ensureTablesExist();
     const [rows] = await pool.query('SELECT * FROM orders ORDER BY createdAt DESC');
     const orders = rows.map(o => ({ ...o, items: JSON.parse(o.items || '[]') }));
     res.json(orders);
@@ -255,6 +387,7 @@ app.get('/api/admin/orders', async (req, res) => {
 // ─── Update Order Status (Admin) ─────────────────────────────────────────────
 app.patch('/api/admin/orders/:id/status', async (req, res) => {
   try {
+    await ensureTablesExist();
     const { status } = req.body;
     const validStatuses = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
     if (!validStatuses.includes(status)) {
@@ -267,87 +400,11 @@ app.patch('/api/admin/orders/:id/status', async (req, res) => {
   }
 });
 
-// ─── Init DB & Seed Data ─────────────────────────────────────────────────────
+// ─── Init DB ─────────────────────────────────────────────────────────────────
 const initDbHandler = async (req, res) => {
   try {
-    // Create categories table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS categories (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(100) NOT NULL UNIQUE,
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create products table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        category VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
-        description TEXT,
-        originalPrice DECIMAL(10, 2) NOT NULL,
-        discountedPrice DECIMAL(10, 2) NOT NULL,
-        discount INT NOT NULL,
-        badge VARCHAR(50) DEFAULT NULL,
-        imageUrl TEXT,
-        stock INT DEFAULT 100,
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create orders table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS orders (
-        id VARCHAR(20) PRIMARY KEY,
-        customerName VARCHAR(255) NOT NULL,
-        mobile VARCHAR(20) NOT NULL,
-        whatsapp VARCHAR(20),
-        address TEXT NOT NULL,
-        landmark VARCHAR(255),
-        city VARCHAR(100) NOT NULL,
-        pincode VARCHAR(20) NOT NULL,
-        items JSON,
-        totalAmount DECIMAL(10, 2) NOT NULL,
-        status VARCHAR(50) DEFAULT 'Order Received',
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Seed categories
-    const [catCountRows] = await pool.query('SELECT COUNT(*) as count FROM categories');
-    if (catCountRows[0].count === 0) {
-      await pool.query('INSERT IGNORE INTO categories (name) SELECT DISTINCT category FROM products WHERE category IS NOT NULL');
-    }
-
-    // Seed products only if table is empty
-    const [countRows] = await pool.query('SELECT COUNT(*) as count FROM products');
-    if (countRows[0].count === 0) {
-      const products = [
-        ['Peacock Flower Pot', 'Flower Pots', 'Spectacular peacock-tail pattern with golden sparks', 850, 595, 30, 'Best Seller', 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?w=600&q=80'],
-        ['Royal Sky Shot', 'Sky Shots', 'Multi-colour sky burst with trailing glitter', 1200, 900, 25, 'New', 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80'],
-        ['Golden Chakra Wheel', 'Ground Chakras', 'Spinning golden chakra with 3-minute burn', 600, 480, 20, null, 'https://images.unsplash.com/photo-1533294455009-a77b7557d2d1?w=600&q=80'],
-        ['Diamond Sparkler Set', 'Sparklers', 'Premium 12-inch sparklers, pack of 20', 450, 382, 15, null, 'https://images.unsplash.com/photo-1576020799627-aeac74d58064?w=600&q=80'],
-        ['Festival Mega Combo', 'Combo Packs', 'All-in-one festival pack with 50+ items', 2500, 1999, 20, 'Best Seller', 'https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?w=600&q=80'],
-        ['Thunder Rocket', 'Rockets', 'High-altitude rocket with triple burst finale', 900, 750, 17, 'New', 'https://images.unsplash.com/photo-1467810563316-b5476525c0f9?w=600&q=80'],
-        ['Crystal Fountain', 'Fountains', 'Silver and gold fountain with 90 seconds burn', 450, 350, 22, null, 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80'],
-        ['Classic Crackers Box', 'Crackers', 'Traditional sound crackers, family pack of 100', 399, 299, 25, null, 'https://images.unsplash.com/photo-1533294455009-a77b7557d2d1?w=600&q=80'],
-        ['Ground Novelty Set', 'Ground Novelties', 'Fun ground-level show with snakes and worms', 700, 550, 21, null, 'https://images.unsplash.com/photo-1576020799627-aeac74d58064?w=600&q=80'],
-        ['Sky Burst Combo', 'Combo Packs', 'Sky shots and rockets combo for night shows', 3000, 2399, 20, 'Best Seller', 'https://images.unsplash.com/photo-1543857778-c4a1a3e0b2eb?w=600&q=80'],
-        ['Star Sparkler Set', 'Sparklers', 'Star-shaped sparklers with colour effects', 350, 280, 20, 'New', 'https://images.unsplash.com/photo-1576020799627-aeac74d58064?w=600&q=80'],
-        ['Mega Fountain', 'Fountains', 'Giant fountain with 2-minute multicolor burst', 800, 650, 19, null, 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&q=80'],
-      ];
-
-      for (const p of products) {
-        await pool.query(
-          `INSERT INTO products (name, category, description, originalPrice, discountedPrice, discount, badge, imageUrl) 
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          p
-        );
-      }
-    }
-
-    res.json({ message: 'Database initialized successfully', note: 'Tables created and products seeded.' });
+    await ensureTablesExist();
+    res.json({ message: 'Database initialized successfully', note: 'Tables ready for admin entries.' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

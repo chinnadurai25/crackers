@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ShoppingBag, Star } from 'lucide-react';
+import { ShoppingBag, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import QuantitySelector from './QuantitySelector';
 import { useCart } from '../context/CartContext';
 
@@ -12,12 +12,27 @@ const BADGE_STYLES = {
 const ProductCard = ({ product }) => {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [currentImgIndex, setCurrentImgIndex] = useState(0);
   const { addToCart } = useCart();
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
     setAdded(true);
     setTimeout(() => setAdded(false), 1500);
+  };
+
+  const imagesList = (product.images && product.images.length > 0)
+    ? product.images
+    : (product.imageUrl ? [product.imageUrl] : []);
+
+  const handleNextImage = (e) => {
+    e.stopPropagation();
+    setCurrentImgIndex((prev) => (prev + 1) % imagesList.length);
+  };
+
+  const handlePrevImage = (e) => {
+    e.stopPropagation();
+    setCurrentImgIndex((prev) => (prev - 1 + imagesList.length) % imagesList.length);
   };
 
   return (
@@ -39,22 +54,58 @@ const ProductCard = ({ product }) => {
         </div>
       )}
 
-      {/* Product Image */}
+      {/* Product Image Carousel */}
       <div className="w-full h-52 bg-black/50 overflow-hidden relative flex-shrink-0">
-        {product.imageUrl ? (
+        {imagesList.length > 0 ? (
           <img
-            src={product.imageUrl}
+            src={imagesList[currentImgIndex]}
             alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
             onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
           />
         ) : null}
+
         <div
           className="absolute inset-0 text-6xl items-center justify-center hidden"
-          style={{ display: product.imageUrl ? 'none' : 'flex' }}
+          style={{ display: imagesList.length === 0 ? 'flex' : 'none' }}
         >
           🎆
         </div>
+
+        {/* Carousel controls if multiple images */}
+        {imagesList.length > 1 && (
+          <>
+            <button
+              onClick={handlePrevImage}
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+              title="Previous photo"
+            >
+              <ChevronLeft size={18} />
+            </button>
+
+            <button
+              onClick={handleNextImage}
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+              title="Next photo"
+            >
+              <ChevronRight size={18} />
+            </button>
+
+            {/* Pagination Dots */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-20">
+              {imagesList.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(i); }}
+                  className={`h-1.5 rounded-full transition-all ${
+                    i === currentImgIndex ? 'w-4 bg-festival-gold' : 'w-1.5 bg-white/40'
+                  }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
         {/* Hover overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </div>
