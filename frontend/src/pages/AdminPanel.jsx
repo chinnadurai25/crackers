@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers } from 'lucide-react';
 
 const STATUSES = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
-const CATEGORIES = ['Combo Packs', 'Sky Shots', 'Flower Pots', 'Fountains', 'Rockets', 'Sparklers', 'Crackers', 'Ground Chakras', 'Ground Novelties'];
 
 const STATUS_COLORS = {
   'Order Received': 'bg-blue-500/20 text-blue-300 border-blue-500/30',
@@ -26,7 +25,7 @@ const AdminPanel = () => {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Admin view tabs: 'orders' | 'products' | 'add-product'
+  // Admin view tabs: 'orders' | 'products' | 'categories' | 'add-product'
   const [activeTab, setActiveTab] = useState('orders');
 
   // Orders state
@@ -39,6 +38,13 @@ const AdminPanel = () => {
   const [productsLoading, setProductsLoading] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
 
+  // Categories state
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [categoryActionLoading, setCategoryActionLoading] = useState(false);
+
   // Add product form state
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -48,9 +54,9 @@ const AdminPanel = () => {
     discountedPrice: '',
     discount: '',
     badge: '',
-    imageUrl: '',
     stock: '100'
   });
+  const [imageFile, setImageFile] = useState(null);
   const [addProductSuccess, setAddProductSuccess] = useState('');
   const [addProductError, setAddProductError] = useState('');
   const [addProductLoading, setAddProductLoading] = useState(false);
@@ -110,10 +116,24 @@ const AdminPanel = () => {
     setProductsLoading(false);
   };
 
+  // Fetch Categories
+  const fetchCategories = async () => {
+    setCategoriesLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/categories');
+      const data = await res.json();
+      setCategories(Array.isArray(data) ? data : []);
+    } catch {
+      setCategories([]);
+    }
+    setCategoriesLoading(false);
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchOrders();
       fetchProducts();
+      fetchCategories();
     }
   }, [isAuthenticated]);
 
@@ -131,6 +151,56 @@ const AdminPanel = () => {
     setUpdatingStatus(null);
   };
 
+  // Category CRUD Handlers
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName) return;
+    setCategoryActionLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newCategoryName })
+      });
+      if (res.ok) {
+        setNewCategoryName('');
+        fetchCategories();
+      }
+    } catch {}
+    setCategoryActionLoading(false);
+  };
+
+  const handleUpdateCategory = async (id, newName) => {
+    if (!newName) return;
+    setCategoryActionLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (res.ok) {
+        setEditingCategory(null);
+        fetchCategories();
+        fetchProducts(); // Refresh products as their category names might have changed
+      }
+    } catch {}
+    setCategoryActionLoading(false);
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!confirm('Are you sure you want to delete this category? Products in it will become Uncategorized.')) return;
+    setCategoryActionLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/categories/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchCategories();
+        fetchProducts(); // Refresh products
+      }
+    } catch {}
+    setCategoryActionLoading(false);
+  };
+
   // Add Product Submit
   const handleAddProduct = async (e) => {
     e.preventDefault();
@@ -145,16 +215,22 @@ const AdminPanel = () => {
     }
 
     try {
+      const formData = new FormData();
+      formData.append('name', newProduct.name);
+      formData.append('category', newProduct.category);
+      formData.append('description', newProduct.description);
+      formData.append('originalPrice', Number(newProduct.originalPrice));
+      formData.append('discountedPrice', Number(newProduct.discountedPrice));
+      if (newProduct.discount) formData.append('discount', Number(newProduct.discount));
+      formData.append('badge', newProduct.badge);
+      formData.append('stock', Number(newProduct.stock || 100));
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
       const res = await fetch('http://localhost:5000/api/admin/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newProduct,
-          originalPrice: Number(newProduct.originalPrice),
-          discountedPrice: Number(newProduct.discountedPrice),
-          discount: newProduct.discount ? Number(newProduct.discount) : undefined,
-          stock: Number(newProduct.stock || 100)
-        }),
+        body: formData,
       });
       const data = await res.json();
       if (data.success) {
@@ -167,9 +243,11 @@ const AdminPanel = () => {
           discountedPrice: '',
           discount: '',
           badge: '',
-          imageUrl: '',
           stock: '100'
         });
+        setImageFile(null);
+        const fileInput = document.getElementById('productImage');
+        if (fileInput) fileInput.value = '';
         fetchProducts();
       } else {
         setAddProductError(data.error || 'Failed to add product');
@@ -283,7 +361,7 @@ const AdminPanel = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { fetchOrders(); fetchProducts(); }}
+            onClick={() => { fetchOrders(); fetchProducts(); fetchCategories(); }}
             className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-gray-300 hover:text-festival-gold hover:border-festival-gold/40 transition-all text-sm"
           >
             <RefreshCw size={15} /> Refresh
@@ -323,10 +401,10 @@ const AdminPanel = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-3 border-b border-white/10 mb-8 pb-3">
+      <div className="flex gap-3 border-b border-white/10 mb-8 pb-3 overflow-x-auto hide-scrollbar">
         <button
           onClick={() => setActiveTab('orders')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
             activeTab === 'orders'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -337,7 +415,7 @@ const AdminPanel = () => {
 
         <button
           onClick={() => setActiveTab('products')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
             activeTab === 'products'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -347,18 +425,29 @@ const AdminPanel = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('categories')}
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            activeTab === 'categories'
+              ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Layers size={16} /> Categories ({categories.length})
+        </button>
+
+        <button
           onClick={() => setActiveTab('add-product')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
             activeTab === 'add-product'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
           }`}
         >
-          <Plus size={16} /> Add New Product
+          <Plus size={16} /> Add Product
         </button>
       </div>
 
-      {/* Tab 1: Orders */}
+      {/* Tab 1: Orders List */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
           {ordersLoading ? (
@@ -479,6 +568,93 @@ const AdminPanel = () => {
         </div>
       )}
 
+      {/* Tab: Categories */}
+      {activeTab === 'categories' && (
+        <div className="space-y-6">
+          <div className="glass-card p-6">
+            <h3 className="text-xl font-bold text-white mb-4">Add New Category</h3>
+            <form onSubmit={handleAddCategory} className="flex gap-4">
+              <input
+                type="text"
+                required
+                className={inputClass}
+                placeholder="Category Name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={categoryActionLoading}
+                className="btn-primary shrink-0 px-6"
+              >
+                {categoryActionLoading ? 'Adding...' : 'Add'}
+              </button>
+            </form>
+          </div>
+
+          <div className="glass-card p-6">
+            <h3 className="text-xl font-bold text-white mb-4">Manage Categories</h3>
+            {categoriesLoading ? (
+              <p className="text-gray-400">Loading categories...</p>
+            ) : categories.length === 0 ? (
+              <p className="text-gray-400">No categories found.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {categories.map(c => (
+                  <div key={c.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 bg-white/5 border border-white/10 p-4 rounded-xl">
+                    {editingCategory?.id === c.id ? (
+                      <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full sm:mr-4">
+                        <input
+                          type="text"
+                          autoFocus
+                          className={inputClass}
+                          value={editingCategory.name}
+                          onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleUpdateCategory(c.id, editingCategory.name)}
+                            disabled={categoryActionLoading}
+                            className="flex-1 sm:flex-none px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-semibold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingCategory(null)}
+                            className="flex-1 sm:flex-none px-4 py-2 bg-gray-500/20 text-gray-400 rounded-lg hover:bg-gray-500/30 transition-colors text-sm font-semibold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-white font-medium break-words pr-0 sm:pr-4">{c.name}</span>
+                        <div className="flex gap-2 w-full sm:w-auto justify-end">
+                          <button
+                            onClick={() => setEditingCategory({ id: c.id, name: c.name })}
+                            className="flex-1 sm:flex-none px-4 py-1.5 text-gray-400 hover:text-festival-gold hover:bg-white/5 rounded-lg transition-colors text-sm font-semibold border border-transparent hover:border-festival-gold/30"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCategory(c.id)}
+                            disabled={categoryActionLoading}
+                            className="p-2 text-gray-400 hover:text-festival-crimson hover:bg-white/5 rounded-lg transition-colors"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Tab 3: Add New Product Form */}
       {activeTab === 'add-product' && (
         <motion.div
@@ -511,9 +687,12 @@ const AdminPanel = () => {
                   value={newProduct.category}
                   onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
                 >
-                  {CATEGORIES.map(c => (
-                    <option key={c} value={c} className="bg-[#0d0d14]">{c}</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.name} className="bg-[#0d0d14]">{c.name}</option>
                   ))}
+                  {categories.length === 0 && (
+                    <option value="Uncategorized" className="bg-[#0d0d14]">Uncategorized</option>
+                  )}
                 </select>
               </div>
 
@@ -557,13 +736,13 @@ const AdminPanel = () => {
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-gray-300 text-sm font-medium">Image URL (Optional)</label>
+                <label className="text-gray-300 text-sm font-medium">Upload Image (Optional)</label>
                 <input
-                  type="url"
+                  type="file"
+                  id="productImage"
+                  accept="image/*"
                   className={inputClass}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  value={newProduct.imageUrl}
-                  onChange={(e) => setNewProduct({ ...newProduct, imageUrl: e.target.value })}
+                  onChange={(e) => setImageFile(e.target.files[0])}
                 />
               </div>
 

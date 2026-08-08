@@ -23,6 +23,7 @@ function App() {
           <main className="flex-grow pt-20">
             <Routes>
               <Route path="/" element={<><Hero /><ProductCatalog /></>} />
+              <Route path="/products" element={<ProductCatalog />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/tracking" element={<OrderTracking />} />
               <Route path="/admin" element={<AdminPanel />} />

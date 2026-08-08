@@ -2,12 +2,35 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const mysql = require('mysql2/promise');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Setup uploads directory
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir);
+}
+
+// Serve uploaded files
+app.use('/uploads', express.static(uploadsDir));
+
+// Multer config
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
 
 // Create database connection pool
 const pool = mysql.createPool({
@@ -54,9 +77,63 @@ app.get('/api/products', async (req, res) => {
 // ─── Get Distinct Categories ─────────────────────────────────────────────────
 app.get('/api/categories', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT DISTINCT category FROM products ORDER BY category ASC');
-    const categories = ['All', ...rows.map(r => r.category)];
+    const [rows] = await pool.query('SELECT name FROM categories ORDER BY name ASC');
+    const categories = ['All', ...rows.map(r => r.name)];
     res.json(categories);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Admin Categories ─────────────────────────────────────────────────────────
+app.get('/api/admin/categories', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM categories ORDER BY name ASC');
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/admin/categories', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const [result] = await pool.query('INSERT INTO categories (name) VALUES (?)', [name]);
+    res.json({ success: true, id: result.insertId, message: 'Category added' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Category already exists' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/categories/:id', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    
+    const [oldRows] = await pool.query('SELECT name FROM categories WHERE id = ?', [req.params.id]);
+    if (oldRows.length === 0) return res.status(404).json({ error: 'Category not found' });
+    const oldName = oldRows[0].name;
+
+    await pool.query('UPDATE categories SET name = ? WHERE id = ?', [name, req.params.id]);
+    await pool.query('UPDATE products SET category = ? WHERE category = ?', [name, oldName]);
+    
+    res.json({ success: true, message: 'Category updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/categories/:id', async (req, res) => {
+  try {
+    const [oldRows] = await pool.query('SELECT name FROM categories WHERE id = ?', [req.params.id]);
+    if (oldRows.length > 0) {
+      const oldName = oldRows[0].name;
+      await pool.query('UPDATE products SET category = ? WHERE category = ?', ['Uncategorized', oldName]);
+    }
+    await pool.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Category deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -116,9 +193,15 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 // ─── Add Product (Admin) ─────────────────────────────────────────────────────
-app.post('/api/admin/products', async (req, res) => {
+app.post('/api/admin/products', upload.single('image'), async (req, res) => {
   try {
-    const { name, category, description, originalPrice, discountedPrice, discount, badge, imageUrl, stock } = req.body;
+    const { name, category, description, originalPrice, discountedPrice, discount, badge, stock } = req.body;
+    let imageUrl = req.body.imageUrl || '';
+
+    if (req.file) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      imageUrl = `${baseUrl}/uploads/${req.file.filename}`;
+    }
     
     if (!name || !originalPrice || !discountedPrice) {
       return res.status(400).json({ error: 'Name, original price, and discounted price are required' });
@@ -187,6 +270,15 @@ app.patch('/api/admin/orders/:id/status', async (req, res) => {
 // ─── Init DB & Seed Data ─────────────────────────────────────────────────────
 const initDbHandler = async (req, res) => {
   try {
+    // Create categories table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create products table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -221,6 +313,12 @@ const initDbHandler = async (req, res) => {
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Seed categories
+    const [catCountRows] = await pool.query('SELECT COUNT(*) as count FROM categories');
+    if (catCountRows[0].count === 0) {
+      await pool.query('INSERT IGNORE INTO categories (name) SELECT DISTINCT category FROM products WHERE category IS NOT NULL');
+    }
 
     // Seed products only if table is empty
     const [countRows] = await pool.query('SELECT COUNT(*) as count FROM products');

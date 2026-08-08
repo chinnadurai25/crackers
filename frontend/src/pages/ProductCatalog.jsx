@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 
 const CATEGORY_ICONS = {
@@ -16,11 +17,20 @@ const CATEGORY_ICONS = {
 };
 
 const ProductCatalog = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const categoryFromUrl = searchParams.get('category') || 'All';
+
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState(['All']);
-  const [activeCategory, setActiveCategory] = useState('All');
+  const [activeCategory, setActiveCategory] = useState(categoryFromUrl);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    setActiveCategory(searchParams.get('category') || 'All');
+  }, [location.search]);
 
   // Fetch categories once
   useEffect(() => {
@@ -50,6 +60,14 @@ const ProductCatalog = () => {
       });
   }, [activeCategory]);
 
+  const handleCategoryClick = (cat) => {
+    if (cat === 'All') {
+      navigate('/products');
+    } else {
+      navigate(`/products?category=${encodeURIComponent(cat)}`);
+    }
+  };
+
   return (
     <section id="shop" className="py-16 px-6 max-w-7xl mx-auto">
       {/* Section Header */}
@@ -68,7 +86,7 @@ const ProductCatalog = () => {
           <motion.button
             key={cat}
             id={`category-${cat.replace(/\s+/g, '-').toLowerCase()}`}
-            onClick={() => setActiveCategory(cat)}
+            onClick={() => handleCategoryClick(cat)}
             whileTap={{ scale: 0.95 }}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold border transition-all duration-300 ${
               activeCategory === cat

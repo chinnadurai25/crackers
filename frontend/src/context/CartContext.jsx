@@ -52,7 +52,7 @@ export const CartProvider = ({ children }) => {
     setCartItems([]);
   }, []);
 
-  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCount = cartItems.length;
   const cartTotal = cartItems.reduce((sum, item) => sum + item.discountedPrice * item.quantity, 0);
 
   return (
