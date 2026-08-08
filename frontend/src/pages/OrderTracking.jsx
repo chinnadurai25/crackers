@@ -1,71 +1,178 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Truck, CheckCircle, CreditCard } from 'lucide-react';
+import { Package, Truck, CheckCircle, CreditCard, Search } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+
+const STATUS_STEPS = [
+  { key: 'Order Received', icon: Package, label: 'Order Received' },
+  { key: 'Payment Verified', icon: CreditCard, label: 'Payment Verified' },
+  { key: 'Packing', icon: Package, label: 'Packing' },
+  { key: 'Shipped', icon: Truck, label: 'Shipped' },
+  { key: 'Delivered', icon: CheckCircle, label: 'Delivered' },
+];
 
 const OrderTracking = () => {
-  const steps = [
-    { icon: <Package />, label: "Order Received", date: "Oct 24, 10:00 AM", status: "completed" },
-    { icon: <CreditCard />, label: "Payment Verified", date: "Oct 24, 11:30 AM", status: "completed" },
-    { icon: <Package />, label: "Packing", date: "Oct 25, 09:00 AM", status: "active" },
-    { icon: <Truck />, label: "Shipped", date: "Pending", status: "pending" },
-    { icon: <CheckCircle />, label: "Delivered", date: "Pending", status: "pending" },
-  ];
+  const [searchParams] = useSearchParams();
+  const [orderId, setOrderId] = useState(searchParams.get('id') || '');
+  const [inputId, setInputId] = useState(searchParams.get('id') || '');
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchOrder = async (id) => {
+    if (!id.trim()) return;
+    setLoading(true);
+    setError('');
+    setOrder(null);
+    try {
+      const res = await fetch(`http://localhost:5000/api/orders/${id.trim()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOrder(data);
+        setOrderId(id.trim());
+      } else {
+        setError(`Order "${id}" not found. Please check the Order ID.`);
+      }
+    } catch {
+      setError('Could not connect to server.');
+    }
+    setLoading(false);
+  };
+
+  // Auto-fetch if id in URL
+  useEffect(() => {
+    const urlId = searchParams.get('id');
+    if (urlId) fetchOrder(urlId);
+  }, []);
+
+  const currentStepIndex = order
+    ? STATUS_STEPS.findIndex(s => s.key === order.status)
+    : -1;
 
   return (
-    <div className="min-h-screen py-20 px-6 max-w-3xl mx-auto">
-      <div className="text-center mb-12">
-        <h2 className="text-4xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-white to-festival-gold">
+    <div className="min-h-screen py-20 px-6 max-w-2xl mx-auto">
+      <div className="text-center mb-10">
+        <h2 className="text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-white to-festival-gold">
           Track Your Order
         </h2>
-        <p className="text-gray-400">Order ID: <span className="text-white font-mono">CRK202600001</span></p>
+        <p className="text-gray-500 text-sm">Enter your Order ID to see real-time status</p>
       </div>
 
-      <motion.div 
-        className="glass-card p-8 md:p-12"
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="relative">
-          {/* Vertical Line */}
-          <div className="absolute left-6 top-0 bottom-0 w-1 bg-white/10 rounded-full"></div>
-
-          <div className="space-y-12">
-            {steps.map((step, index) => (
-              <div key={index} className="relative flex items-center gap-8 z-10">
-                {/* Icon Circle */}
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-colors duration-300 ${
-                  step.status === 'completed' ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.5)]' :
-                  step.status === 'active' ? 'bg-festival-blue text-black shadow-[0_0_15px_rgba(0,210,255,0.5)] border-2 border-white' :
-                  'bg-black/50 border border-white/20 text-gray-500'
-                }`}>
-                  {step.icon}
-                </div>
-                
-                {/* Connecting active line */}
-                {step.status === 'completed' && index < steps.length - 1 && (
-                  <div className="absolute left-6 top-12 w-1 h-12 bg-festival-gold -z-10 shadow-[0_0_10px_rgba(255,215,0,0.5)]"></div>
-                )}
-                {step.status === 'active' && index < steps.length - 1 && (
-                  <div className="absolute left-6 top-12 w-1 h-6 bg-gradient-to-b from-festival-blue to-transparent -z-10"></div>
-                )}
-
-                {/* Text Content */}
-                <div>
-                  <h4 className={`text-xl font-bold ${
-                    step.status === 'completed' ? 'text-white' :
-                    step.status === 'active' ? 'text-festival-blue' :
-                    'text-gray-500'
-                  }`}>
-                    {step.label}
-                  </h4>
-                  <p className="text-gray-400 text-sm mt-1">{step.date}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Search Box */}
+      <div className="glass-card p-5 mb-8">
+        <div className="flex gap-3">
+          <input
+            id="order-search-input"
+            type="text"
+            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-festival-gold transition-colors font-mono"
+            placeholder="e.g. CRK202612345"
+            value={inputId}
+            onChange={(e) => setInputId(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && fetchOrder(inputId)}
+          />
+          <motion.button
+            id="order-search-btn"
+            onClick={() => fetchOrder(inputId)}
+            disabled={loading}
+            className="btn-primary px-6 flex items-center gap-2"
+            whileTap={{ scale: 0.95 }}
+          >
+            <Search size={16} />
+            {loading ? '...' : 'Track'}
+          </motion.button>
         </div>
-      </motion.div>
+        {error && <p className="text-red-400 text-sm mt-3 text-center">{error}</p>}
+      </div>
+
+      {/* Order Details */}
+      {order && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-6"
+        >
+          {/* Order Info */}
+          <div className="glass-card p-5">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <p className="text-gray-500 text-xs mb-1">Order ID</p>
+                <p className="text-festival-gold font-mono font-bold text-lg">{order.id}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-gray-500 text-xs mb-1">Total Amount</p>
+                <p className="text-white font-bold text-xl">₹{Number(order.totalAmount).toLocaleString()}</p>
+              </div>
+            </div>
+            <div className="border-t border-white/10 pt-4 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-gray-500 text-xs">Customer</p>
+                <p className="text-white font-medium">{order.customerName}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 text-xs">Mobile</p>
+                <p className="text-white font-medium">{order.mobile}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-500 text-xs">Delivery Address</p>
+                <p className="text-white font-medium">{order.address}, {order.city} - {order.pincode}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Status Timeline */}
+          <div className="glass-card p-6 md:p-8">
+            <h3 className="text-lg font-bold mb-6 text-white">Order Status</h3>
+            <div className="relative">
+              <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-white/10 rounded-full" />
+              <div className="space-y-8">
+                {STATUS_STEPS.map((step, index) => {
+                  const Icon = step.icon;
+                  const isCompleted = index <= currentStepIndex;
+                  const isActive = index === currentStepIndex;
+                  return (
+                    <div key={step.key} className="relative flex items-center gap-5 z-10">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                        isActive ? 'bg-festival-blue text-white shadow-[0_0_15px_rgba(0,210,255,0.6)] border-2 border-white scale-110' :
+                        isCompleted ? 'bg-festival-gold text-black shadow-[0_0_12px_rgba(255,215,0,0.5)]' :
+                        'bg-black/50 border border-white/15 text-gray-600'
+                      }`}>
+                        <Icon size={16} />
+                      </div>
+                      {/* Connecting line */}
+                      {isCompleted && index < STATUS_STEPS.length - 1 && (
+                        <div className="absolute left-5 top-10 w-0.5 h-8 bg-festival-gold -z-10" />
+                      )}
+                      <div>
+                        <h4 className={`font-bold ${isActive ? 'text-festival-blue' : isCompleted ? 'text-white' : 'text-gray-600'}`}>
+                          {step.label}
+                        </h4>
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          {isCompleted ? (isActive ? 'In Progress' : 'Completed') : 'Pending'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Items */}
+          {order.items && order.items.length > 0 && (
+            <div className="glass-card p-5">
+              <h3 className="font-bold mb-4 text-white">Items Ordered</h3>
+              <div className="space-y-2">
+                {order.items.map((item, i) => (
+                  <div key={i} className="flex justify-between text-sm text-gray-300">
+                    <span>{item.name} <span className="text-gray-600">×{item.quantity}</span></span>
+                    <span>₹{(item.price * item.quantity).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 };
