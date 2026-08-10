@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X } from 'lucide-react';
 
 const STATUSES = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
 
@@ -38,6 +38,13 @@ const AdminPanel = () => {
   const [productsLoading, setProductsLoading] = useState(false);
   const [deletingProductId, setDeletingProductId] = useState(null);
 
+  // Edit Product Modal State
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editImageFiles, setEditImageFiles] = useState([]);
+  const [editImagePreviews, setEditImagePreviews] = useState([]);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+
   // Categories state
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
@@ -55,13 +62,11 @@ const AdminPanel = () => {
     description: '',
     originalPrice: '',
     discountedPrice: '',
-    discount: '',
     badge: '',
     stock: '100'
   });
-  const [imageUrlsText, setImageUrlsText] = useState('');
   const [imageFiles, setImageFiles] = useState([]);
-  const [imageTab, setImageTab] = useState('urls'); // 'urls' | 'files'
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [addProductSuccess, setAddProductSuccess] = useState('');
   const [addProductError, setAddProductError] = useState('');
   const [addProductLoading, setAddProductLoading] = useState(false);
@@ -214,7 +219,15 @@ const AdminPanel = () => {
     setCategoryActionLoading(false);
   };
 
-  // Add Product Submit (supports MULTIPLE IMAGES via URLs or file upload)
+  // Handle File Selection with instant thumbnail previews for Add Product
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files);
+    setImageFiles(files);
+    const previews = files.map(file => URL.createObjectURL(file));
+    setImagePreviews(previews);
+  };
+
+  // Add Product Submit
   const handleAddProduct = async (e) => {
     e.preventDefault();
     setAddProductLoading(true);
@@ -225,8 +238,8 @@ const AdminPanel = () => {
       ? newProduct.customCategory.trim()
       : newProduct.category.trim();
 
-    if (!newProduct.name || !newProduct.originalPrice || !newProduct.discountedPrice) {
-      setAddProductError('Please fill in Name, Original Price, and Discounted Price.');
+    if (!newProduct.name || !newProduct.discountedPrice) {
+      setAddProductError('Please fill in Product Name and Selling Price.');
       setAddProductLoading(false);
       return;
     }
@@ -238,50 +251,29 @@ const AdminPanel = () => {
     }
 
     try {
-      let res, data;
-
-      // Parse pasted image URLs from textarea
-      const parsedUrls = imageUrlsText
-        .split('\n')
-        .map(u => u.trim())
-        .filter(u => u.startsWith('http'));
-
-      if (imageTab === 'files' && imageFiles && imageFiles.length > 0) {
-        // Send as FormData (file upload)
-        const formData = new FormData();
-        formData.append('name', newProduct.name);
-        formData.append('category', targetCategory);
-        formData.append('description', newProduct.description);
+      const formData = new FormData();
+      formData.append('name', newProduct.name);
+      formData.append('category', targetCategory);
+      formData.append('description', newProduct.description || '');
+      formData.append('discountedPrice', Number(newProduct.discountedPrice));
+      if (newProduct.originalPrice) {
         formData.append('originalPrice', Number(newProduct.originalPrice));
-        formData.append('discountedPrice', Number(newProduct.discountedPrice));
-        if (newProduct.discount) formData.append('discount', Number(newProduct.discount));
-        formData.append('badge', newProduct.badge || '');
-        formData.append('stock', Number(newProduct.stock || 100));
-        Array.from(imageFiles).forEach(file => formData.append('productImages', file));
-        res = await fetch('http://localhost:5000/api/admin/products', { method: 'POST', body: formData });
-      } else {
-        // Send as JSON (URL-based images, most reliable)
-        res = await fetch('http://localhost:5000/api/admin/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: newProduct.name,
-            category: targetCategory,
-            description: newProduct.description,
-            originalPrice: Number(newProduct.originalPrice),
-            discountedPrice: Number(newProduct.discountedPrice),
-            discount: newProduct.discount ? Number(newProduct.discount) : undefined,
-            badge: newProduct.badge || '',
-            stock: Number(newProduct.stock || 100),
-            imageUrls: parsedUrls.join(','),
-          }),
-        });
+      }
+      formData.append('badge', newProduct.badge || '');
+      formData.append('stock', Number(newProduct.stock || 100));
+
+      if (imageFiles && imageFiles.length > 0) {
+        imageFiles.forEach(file => formData.append('productImages', file));
       }
 
-      data = await res.json();
+      const res = await fetch('http://localhost:5000/api/admin/products', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
       if (data.success) {
-        const imgCount = imageTab === 'files' ? (imageFiles?.length || 0) : parsedUrls.length;
-        setAddProductSuccess(`Product "${newProduct.name}" added with ${imgCount} image(s)! 🎉`);
+        setAddProductSuccess(`Product "${newProduct.name}" added successfully! 🎉`);
         setNewProduct({
           name: '',
           category: categories.length > 0 ? categories[0].name : 'Flower Pots',
@@ -289,12 +281,11 @@ const AdminPanel = () => {
           description: '',
           originalPrice: '',
           discountedPrice: '',
-          discount: '',
           badge: '',
           stock: '100'
         });
         setImageFiles([]);
-        setImageUrlsText('');
+        setImagePreviews([]);
         const fileInput = document.getElementById('productImagesInput');
         if (fileInput) fileInput.value = '';
         fetchProducts();
@@ -306,6 +297,67 @@ const AdminPanel = () => {
       setAddProductError('Could not connect to server.');
     }
     setAddProductLoading(false);
+  };
+
+  // Open Edit Product Modal
+  const openEditModal = (product) => {
+    setEditingProduct({
+      id: product.id,
+      name: product.name,
+      category: product.category || 'General',
+      description: product.description || '',
+      discountedPrice: product.discountedPrice || '',
+      originalPrice: (product.originalPrice && Number(product.originalPrice) > Number(product.discountedPrice)) ? product.originalPrice : '',
+      badge: product.badge || '',
+      stock: product.stock || 100,
+      existingImages: product.images || (product.imageUrl ? [product.imageUrl] : [])
+    });
+    setEditImageFiles([]);
+    setEditImagePreviews([]);
+    setEditError('');
+  };
+
+  // Handle Edit Submit
+  const handleEditProductSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setEditLoading(true);
+    setEditError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('name', editingProduct.name);
+      formData.append('category', editingProduct.category);
+      formData.append('description', editingProduct.description);
+      formData.append('discountedPrice', Number(editingProduct.discountedPrice));
+      if (editingProduct.originalPrice) {
+        formData.append('originalPrice', Number(editingProduct.originalPrice));
+      }
+      formData.append('badge', editingProduct.badge || '');
+      formData.append('stock', Number(editingProduct.stock || 100));
+      formData.append('existingImages', JSON.stringify(editingProduct.existingImages || []));
+
+      if (editImageFiles && editImageFiles.length > 0) {
+        editImageFiles.forEach(file => formData.append('productImages', file));
+      }
+
+      const res = await fetch(`http://localhost:5000/api/admin/products/${editingProduct.id}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setEditingProduct(null);
+        fetchProducts();
+        fetchCategories();
+      } else {
+        setEditError(data.error || 'Failed to update product');
+      }
+    } catch {
+      setEditError('Could not connect to server.');
+    }
+    setEditLoading(false);
   };
 
   // Delete Product
@@ -573,7 +625,7 @@ const AdminPanel = () => {
         </div>
       )}
 
-      {/* Tab 2: Products List */}
+      {/* Tab 2: Products List (with Edit & Delete buttons) */}
       {activeTab === 'products' && (
         <div className="space-y-4">
           {productsLoading ? (
@@ -613,18 +665,31 @@ const AdminPanel = () => {
                     <p className="text-gray-400 text-xs line-clamp-1 mb-1">{p.description}</p>
                     <div className="flex items-baseline gap-2">
                       <span className="text-festival-gold font-bold">₹{p.discountedPrice}</span>
-                      <span className="text-gray-500 line-through text-xs">₹{p.originalPrice}</span>
-                      <span className="text-festival-crimson text-xs font-bold">-{p.discount}%</span>
+                      {p.originalPrice && Number(p.originalPrice) > Number(p.discountedPrice) && (
+                        <>
+                          <span className="text-gray-500 line-through text-xs">₹{p.originalPrice}</span>
+                          <span className="text-festival-crimson text-xs font-bold">-{p.discount}%</span>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDeleteProduct(p.id)}
-                    disabled={deletingProductId === p.id}
-                    className="p-2 text-gray-500 hover:text-festival-crimson hover:bg-white/5 rounded-lg transition-colors"
-                    title="Delete product"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex flex-col gap-1">
+                    <button
+                      onClick={() => openEditModal(p)}
+                      className="p-2 text-gray-400 hover:text-festival-gold hover:bg-white/5 rounded-lg transition-colors"
+                      title="Edit Product"
+                    >
+                      <Pencil size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(p.id)}
+                      disabled={deletingProductId === p.id}
+                      className="p-2 text-gray-500 hover:text-festival-crimson hover:bg-white/5 rounded-lg transition-colors"
+                      title="Delete product"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -754,7 +819,7 @@ const AdminPanel = () => {
                 />
               </div>
 
-              {/* Category selector or create new */}
+              {/* Category selector */}
               <div className="space-y-1.5">
                 <label className="text-gray-300 text-sm font-medium">Category *</label>
                 <select
@@ -812,20 +877,7 @@ const AdminPanel = () => {
               )}
 
               <div className="space-y-1.5">
-                <label className="text-gray-300 text-sm font-medium">Original MRP Price (₹) *</label>
-                <input
-                  type="number"
-                  required
-                  min="1"
-                  className={inputClass}
-                  placeholder="e.g. 1200"
-                  value={newProduct.originalPrice}
-                  onChange={(e) => setNewProduct({ ...newProduct, originalPrice: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-gray-300 text-sm font-medium">Discounted Selling Price (₹) *</label>
+                <label className="text-gray-300 text-sm font-medium">Selling Price (₹) *</label>
                 <input
                   type="number"
                   required
@@ -837,76 +889,74 @@ const AdminPanel = () => {
                 />
               </div>
 
-              {/* Multiple Images — URL paste OR File upload */}
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-gray-300 text-sm font-medium block">Product Images (Multiple)</label>
+              <div className="space-y-1.5">
+                <label className="text-gray-300 text-sm font-medium">Original MRP Price (₹) <span className="text-gray-500 text-xs font-normal">(Optional)</span></label>
+                <input
+                  type="number"
+                  min="1"
+                  className={inputClass}
+                  placeholder="e.g. 1200 (Leave empty if no discount)"
+                  value={newProduct.originalPrice}
+                  onChange={(e) => setNewProduct({ ...newProduct, originalPrice: e.target.value })}
+                />
+              </div>
 
-                {/* Toggle tabs */}
-                <div className="flex gap-2 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => setImageTab('urls')}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      imageTab === 'urls'
-                        ? 'bg-festival-gold text-black'
-                        : 'bg-white/5 text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    🌐 Paste Image URLs
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setImageTab('files')}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                      imageTab === 'files'
-                        ? 'bg-festival-gold text-black'
-                        : 'bg-white/5 text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    💻 Upload from Computer
-                  </button>
+              {/* Direct Multiple File Selection */}
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-gray-300 text-sm font-medium block">
+                  Select Product Images (Select One or Multiple Photos)
+                </label>
+
+                <div className="border-2 border-dashed border-white/20 hover:border-festival-gold/50 rounded-2xl p-6 text-center transition-all bg-white/5 group relative cursor-pointer">
+                  <input
+                    type="file"
+                    id="productImagesInput"
+                    accept="image/*"
+                    multiple
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                    onChange={handleFileChange}
+                  />
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-12 h-12 bg-festival-gold/20 text-festival-gold rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Upload size={24} />
+                    </div>
+                    <p className="text-white font-semibold text-sm">
+                      {imageFiles.length > 0 ? `${imageFiles.length} Image(s) Selected` : 'Click or Drag to Select Product Photos'}
+                    </p>
+                    <p className="text-gray-500 text-xs">You can select multiple photo files from your computer or phone at once.</p>
+                  </div>
                 </div>
 
-                {imageTab === 'urls' && (
-                  <div>
-                    <textarea
-                      rows="4"
-                      className={inputClass}
-                      placeholder={'Paste one image URL per line:\nhttps://example.com/image1.jpg\nhttps://example.com/image2.jpg'}
-                      value={imageUrlsText}
-                      onChange={(e) => setImageUrlsText(e.target.value)}
-                    />
-                    <p className="text-gray-500 text-xs mt-1">Enter one image URL per line. All images will be shown in a carousel on the product card.</p>
-                    {imageUrlsText.split('\n').filter(u => u.trim().startsWith('http')).length > 0 && (
-                      <p className="text-festival-gold text-xs mt-1 font-semibold">
-                        ✓ {imageUrlsText.split('\n').filter(u => u.trim().startsWith('http')).length} image URL(s) ready
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {imageTab === 'files' && (
-                  <div>
-                    <input
-                      type="file"
-                      id="productImagesInput"
-                      accept="image/*"
-                      multiple
-                      className={inputClass}
-                      onChange={(e) => setImageFiles(e.target.files)}
-                    />
-                    <p className="text-gray-500 text-xs mt-1">Hold Ctrl (Windows) or Cmd (Mac) to select multiple files at once.</p>
-                    {imageFiles && imageFiles.length > 0 && (
-                      <p className="text-festival-gold text-xs mt-1 font-semibold">
-                        ✓ {imageFiles.length} file(s) selected
-                      </p>
-                    )}
+                {/* Instant Image Previews */}
+                {imagePreviews.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-gray-400 text-xs mb-2 font-medium">Selected Photos Preview ({imagePreviews.length}):</p>
+                    <div className="flex flex-wrap gap-3">
+                      {imagePreviews.map((src, idx) => (
+                        <div key={idx} className="w-20 h-20 bg-black/60 rounded-xl overflow-hidden border border-white/20 relative group">
+                          <img src={src} alt={`preview-${idx}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newFiles = imageFiles.filter((_, i) => i !== idx);
+                              const newPreviews = imagePreviews.filter((_, i) => i !== idx);
+                              setImageFiles(newFiles);
+                              setImagePreviews(newPreviews);
+                            }}
+                            className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-1 text-xs transition-colors shadow"
+                            title="Remove photo"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-gray-300 text-sm font-medium">Description</label>
+                <label className="text-gray-300 text-sm font-medium">Description (Optional)</label>
                 <textarea
                   rows="3"
                   className={inputClass}
@@ -941,6 +991,171 @@ const AdminPanel = () => {
           </form>
         </motion.div>
       )}
+
+      {/* EDIT PRODUCT MODAL */}
+      <AnimatePresence>
+        {editingProduct && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 md:p-8 w-full max-w-2xl bg-[#0d0d14] border-white/20 shadow-2xl relative my-8"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Pencil className="text-festival-gold" size={22} /> Edit Product
+                </h3>
+                <button
+                  onClick={() => setEditingProduct(null)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleEditProductSubmit} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-gray-300 text-sm font-medium">Product Name *</label>
+                    <input
+                      type="text"
+                      required
+                      className={inputClass}
+                      value={editingProduct.name}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-sm font-medium">Category *</label>
+                    <select
+                      className={inputClass}
+                      value={editingProduct.category}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                    >
+                      {categories.map(c => (
+                        <option key={c.id || c.name} value={c.name} className="bg-[#0d0d14]">{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-sm font-medium">Badge (Optional)</label>
+                    <select
+                      className={inputClass}
+                      value={editingProduct.badge || ''}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, badge: e.target.value })}
+                    >
+                      <option value="" className="bg-[#0d0d14]">None</option>
+                      <option value="Best Seller" className="bg-[#0d0d14]">Best Seller</option>
+                      <option value="New" className="bg-[#0d0d14]">New</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-sm font-medium">Selling Price (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      className={inputClass}
+                      value={editingProduct.discountedPrice}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, discountedPrice: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-sm font-medium">Original MRP Price (₹) <span className="text-gray-500 text-xs font-normal">(Optional)</span></label>
+                    <input
+                      type="number"
+                      min="1"
+                      className={inputClass}
+                      placeholder="Leave empty if no discount"
+                      value={editingProduct.originalPrice}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, originalPrice: e.target.value })}
+                    />
+                  </div>
+
+                  {/* Existing Photos */}
+                  {editingProduct.existingImages && editingProduct.existingImages.length > 0 && (
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-gray-300 text-sm font-medium block">Current Product Photos:</label>
+                      <div className="flex flex-wrap gap-3">
+                        {editingProduct.existingImages.map((src, idx) => (
+                          <div key={idx} className="w-20 h-20 bg-black/60 rounded-xl overflow-hidden border border-white/20 relative">
+                            <img src={src} alt={`existing-${idx}`} className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newExist = editingProduct.existingImages.filter((_, i) => i !== idx);
+                                setEditingProduct({ ...editingProduct, existingImages: newExist });
+                              }}
+                              className="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 text-white rounded-full p-1 text-xs transition-colors"
+                              title="Delete photo"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add New Photos input for edit */}
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-gray-300 text-sm font-medium block">Add Additional Photos (Optional)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className={inputClass}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files);
+                        setEditImageFiles(files);
+                        setEditImagePreviews(files.map(f => URL.createObjectURL(f)));
+                      }}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-gray-300 text-sm font-medium">Description (Optional)</label>
+                    <textarea
+                      rows="3"
+                      className={inputClass}
+                      value={editingProduct.description}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, description: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {editError && (
+                  <p className="text-red-400 text-sm text-center bg-red-500/10 border border-red-500/20 py-2 rounded-xl">
+                    {editError}
+                  </p>
+                )}
+
+                <div className="flex gap-3 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProduct(null)}
+                    className="flex-1 py-3 border border-white/20 rounded-xl text-gray-300 hover:text-white hover:border-white/50 transition-all font-semibold text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editLoading}
+                    className="flex-1 btn-primary py-3 text-sm font-semibold flex items-center justify-center gap-2"
+                  >
+                    {editLoading ? 'Saving Changes...' : 'Save Product Changes 💾'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

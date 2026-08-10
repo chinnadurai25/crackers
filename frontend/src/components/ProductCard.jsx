@@ -41,10 +41,12 @@ const ProductCard = ({ product }) => {
       whileHover={{ y: -8 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
     >
-      {/* Discount Badge */}
-      <div className="absolute top-3 right-3 z-20 bg-festival-crimson text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-[0_0_10px_rgba(220,20,60,0.5)]">
-        -{product.discount}%
-      </div>
+      {/* Discount Badge — only when discount is actually > 0 */}
+      {Number(product.discount) > 0 && Number(product.originalPrice) > Number(product.discountedPrice) && (
+        <div className="absolute top-3 right-3 z-20 bg-festival-crimson text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-[0_0_10px_rgba(220,20,60,0.5)]">
+          -{product.discount}%
+        </div>
+      )}
 
       {/* Best Seller / New Badge */}
       {product.badge && (
@@ -54,30 +56,27 @@ const ProductCard = ({ product }) => {
         </div>
       )}
 
-      {/* Product Image Carousel */}
-      <div className="w-full h-52 bg-black/50 overflow-hidden relative flex-shrink-0">
+      {/* Product Image Carousel — fixed uniform height, object-cover for consistent look */}
+      <div className="w-full h-56 bg-black overflow-hidden relative flex-shrink-0 rounded-t-2xl">
         {imagesList.length > 0 ? (
           <img
             src={imagesList[currentImgIndex]}
             alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
-        ) : null}
-
-        <div
-          className="absolute inset-0 text-6xl items-center justify-center hidden"
-          style={{ display: imagesList.length === 0 ? 'flex' : 'none' }}
-        >
-          🎆
-        </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-6xl bg-white/5">
+            🎆
+          </div>
+        )}
 
         {/* Carousel controls if multiple images */}
         {imagesList.length > 1 && (
           <>
             <button
               onClick={handlePrevImage}
-              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-black/90 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 shadow-md border border-white/20"
               title="Previous photo"
             >
               <ChevronLeft size={18} />
@@ -85,7 +84,7 @@ const ProductCard = ({ product }) => {
 
             <button
               onClick={handleNextImage}
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/90 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/70 hover:bg-black/90 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 shadow-md border border-white/20"
               title="Next photo"
             >
               <ChevronRight size={18} />
@@ -98,7 +97,7 @@ const ProductCard = ({ product }) => {
                   key={i}
                   onClick={(e) => { e.stopPropagation(); setCurrentImgIndex(i); }}
                   className={`h-1.5 rounded-full transition-all ${
-                    i === currentImgIndex ? 'w-4 bg-festival-gold' : 'w-1.5 bg-white/40'
+                    i === currentImgIndex ? 'w-4 bg-festival-gold' : 'w-1.5 bg-white/50'
                   }`}
                 />
               ))}
@@ -107,36 +106,36 @@ const ProductCard = ({ product }) => {
         )}
 
         {/* Hover overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
       </div>
 
       {/* Product Info */}
       <div className="p-4 flex flex-col flex-grow">
         {/* Category Label */}
-        <p className="text-festival-gold text-xs font-bold tracking-widest uppercase mb-1">
+        <p className="text-festival-gold text-xs font-bold tracking-widest uppercase mb-1 truncate">
           {product.category}
         </p>
 
-        {/* Name */}
-        <h3 className="text-white font-bold text-lg mb-1 leading-tight">
+        {/* Name — always 1 line so all cards stay same height */}
+        <h3 className="text-white font-bold text-base mb-1 leading-tight line-clamp-1">
           {product.name}
         </h3>
 
-        {/* Description */}
-        {product.description && (
-          <p className="text-gray-400 text-xs mb-3 leading-relaxed line-clamp-2">
-            {product.description}
-          </p>
-        )}
+        {/* Description — fixed height placeholder so cards align even without description */}
+        <p className="text-gray-400 text-xs leading-relaxed line-clamp-2 h-8 mb-2">
+          {product.description || ''}
+        </p>
 
-        {/* Price */}
+        {/* Price — pinned to bottom */}
         <div className="flex items-baseline gap-2 mb-4 mt-auto">
           <span className="text-2xl font-extrabold text-festival-gold">
-            ₹{product.discountedPrice}
+            ₹{Number(product.discountedPrice).toLocaleString('en-IN')}
           </span>
-          <span className="text-gray-500 line-through text-sm">
-            ₹{product.originalPrice}
-          </span>
+          {product.originalPrice && Number(product.originalPrice) > Number(product.discountedPrice) && (
+            <span className="text-gray-500 line-through text-sm">
+              ₹{Number(product.originalPrice).toLocaleString('en-IN')}
+            </span>
+          )}
         </div>
 
         {/* Quantity + Add to Cart */}

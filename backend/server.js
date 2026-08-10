@@ -309,7 +309,6 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
           const parsed = JSON.parse(imageUrls);
           urls = Array.isArray(parsed) ? parsed : [parsed];
         } catch {
-          // Split by newline OR comma
           urls = imageUrls.split(/[\n,]/).map(u => u.trim()).filter(Boolean);
         }
       } else if (Array.isArray(imageUrls)) {
@@ -325,17 +324,25 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
       allImages.unshift(req.body.imageUrl);
     }
     
-    if (!name || !originalPrice || !discountedPrice) {
-      return res.status(400).json({ error: 'Name, original price, and discounted price are required' });
+    if (!name || !discountedPrice) {
+      return res.status(400).json({ error: 'Product name and selling price are required' });
+    }
+
+    const sellingPrice = Number(discountedPrice);
+    const mrpPrice = originalPrice ? Number(originalPrice) : sellingPrice;
+
+    let calcDiscount = 0;
+    if (discount !== undefined && discount !== null && discount !== '') {
+      calcDiscount = Number(discount);
+    } else if (mrpPrice > sellingPrice) {
+      calcDiscount = Math.round(((mrpPrice - sellingPrice) / mrpPrice) * 100);
     }
 
     const mainCategory = (category || 'General').trim();
-    // Auto-create category in categories table if it doesn't exist
     if (mainCategory) {
       await pool.query('INSERT IGNORE INTO categories (name) VALUES (?)', [mainCategory]);
     }
 
-    const calcDiscount = discount ? Number(discount) : Math.round(((originalPrice - discountedPrice) / originalPrice) * 100);
     const mainImageUrl = allImages.length > 0 ? allImages[0] : '';
 
     const [result] = await pool.query(
@@ -345,8 +352,8 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
         name.trim(),
         mainCategory,
         description || '',
-        originalPrice,
-        discountedPrice,
+        mrpPrice,
+        sellingPrice,
         calcDiscount,
         badge || null,
         mainImageUrl,
@@ -356,6 +363,91 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
     );
 
     res.json({ success: true, id: result.insertId, message: 'Product added successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Edit Product (Admin) ───────────────────────────────────────────────────
+app.put('/api/admin/products/:id', upload.any(), async (req, res) => {
+  try {
+    await ensureTablesExist();
+    const productId = req.params.id;
+    const { name, category, description, originalPrice, discountedPrice, discount, badge, stock, existingImages } = req.body;
+
+    // Check if product exists
+    const [existingRows] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
+    if (existingRows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+    const oldProduct = existingRows[0];
+
+    let allImages = [];
+
+    // Keep existing images if provided or from old product
+    if (existingImages) {
+      try {
+        allImages = typeof existingImages === 'string' ? JSON.parse(existingImages) : existingImages;
+      } catch {
+        allImages = existingImages.split(/[\n,]/).map(u => u.trim()).filter(Boolean);
+      }
+    } else if (oldProduct.images) {
+      try {
+        allImages = typeof oldProduct.images === 'string' ? JSON.parse(oldProduct.images) : oldProduct.images;
+      } catch {
+        allImages = oldProduct.imageUrl ? [oldProduct.imageUrl] : [];
+      }
+    } else if (oldProduct.imageUrl) {
+      allImages = [oldProduct.imageUrl];
+    }
+
+    // Append newly uploaded image files
+    if (req.files && req.files.length > 0) {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      req.files.forEach(file => {
+        allImages.push(`${baseUrl}/uploads/${file.filename}`);
+      });
+    }
+
+    const updatedName = name ? name.trim() : oldProduct.name;
+    const sellingPrice = discountedPrice ? Number(discountedPrice) : Number(oldProduct.discountedPrice);
+    const mrpPrice = originalPrice !== undefined && originalPrice !== '' ? Number(originalPrice) : sellingPrice;
+
+    let calcDiscount = 0;
+    if (discount !== undefined && discount !== null && discount !== '') {
+      calcDiscount = Number(discount);
+    } else if (mrpPrice > sellingPrice) {
+      calcDiscount = Math.round(((mrpPrice - sellingPrice) / mrpPrice) * 100);
+    }
+
+    const mainCategory = (category || oldProduct.category || 'General').trim();
+    if (mainCategory) {
+      await pool.query('INSERT IGNORE INTO categories (name) VALUES (?)', [mainCategory]);
+    }
+
+    const mainImageUrl = allImages.length > 0 ? allImages[0] : '';
+
+    await pool.query(
+      `UPDATE products SET 
+        name = ?, category = ?, description = ?, originalPrice = ?, 
+        discountedPrice = ?, discount = ?, badge = ?, imageUrl = ?, images = ?, stock = ?
+       WHERE id = ?`,
+      [
+        updatedName,
+        mainCategory,
+        description !== undefined ? description : oldProduct.description,
+        mrpPrice,
+        sellingPrice,
+        calcDiscount,
+        badge !== undefined ? (badge || null) : oldProduct.badge,
+        mainImageUrl,
+        JSON.stringify(allImages),
+        stock ? Number(stock) : oldProduct.stock,
+        productId
+      ]
+    );
+
+    res.json({ success: true, message: 'Product updated successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
