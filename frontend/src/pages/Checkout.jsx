@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useCart } from '../context/CartContext';
+import { generateBill } from '../utils/generateBill';
+import { FileDown } from 'lucide-react';
+import BillPreviewModal from '../components/BillPreviewModal';
 
 const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-festival-gold transition-colors";
 
@@ -8,8 +11,10 @@ const Checkout = () => {
   const { cartItems, cartTotal, clearCart } = useCart();
   const [step, setStep] = useState(1);
   const [orderId, setOrderId] = useState(null);
+  const [placedOrder, setPlacedOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showBillModal, setShowBillModal] = useState(false);
 
   const [form, setForm] = useState({
     customerName: '', mobile: '', whatsapp: '',
@@ -27,13 +32,24 @@ const Checkout = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          items: cartItems.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.discountedPrice })),
+          items: cartItems.map(i => ({ id: i.id, name: i.name, category: i.category || 'General', quantity: i.quantity, price: i.discountedPrice })),
           totalAmount: cartTotal,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setOrderId(data.orderId);
+        setPlacedOrder({
+          id: data.orderId,
+          customerName: form.customerName,
+          mobile: form.mobile,
+          address: form.address,
+          city: form.city,
+          pincode: form.pincode,
+          items: cartItems.map(i => ({ name: i.name, category: i.category || 'General', quantity: i.quantity, price: i.discountedPrice })),
+          totalAmount: cartTotal,
+          createdAt: new Date().toISOString()
+        });
         clearCart();
         setStep(4);
       } else {
@@ -222,13 +238,30 @@ const Checkout = () => {
               <p className="text-gray-400 text-sm mb-1">Your Order ID</p>
               <p className="text-festival-gold font-mono font-bold text-2xl tracking-wider">{orderId}</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <a href={`/tracking?id=${orderId}`} className="btn-primary">Track Order</a>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+              <button 
+                onClick={() => setShowBillModal(true)}
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                <FileDown size={18} />
+                View Bill
+              </button>
+              <a href={`/tracking?id=${orderId}`} className="px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white transition-all flex items-center justify-center">
+                Track Order
+              </a>
+            </div>
+            <div className="flex justify-center">
               <a href="/" className="px-6 py-3 border border-white/20 rounded-full text-gray-300 hover:text-white hover:border-white/50 transition-all">Continue Shopping</a>
             </div>
           </motion.div>
         )}
       </motion.div>
+
+      <BillPreviewModal 
+        isOpen={showBillModal} 
+        onClose={() => setShowBillModal(false)} 
+        order={placedOrder} 
+      />
     </div>
   );
 };

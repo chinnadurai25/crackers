@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Truck, CheckCircle, CreditCard, Search } from 'lucide-react';
+import { Package, Truck, CheckCircle, CreditCard, Search, FileDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { generateBill } from '../utils/generateBill';
+import BillPreviewModal from '../components/BillPreviewModal';
 
 const STATUS_STEPS = [
   { key: 'Order Received', icon: Package, label: 'Order Received' },
@@ -18,6 +20,7 @@ const OrderTracking = () => {
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showBillModal, setShowBillModal] = useState(false);
 
   const fetchOrder = async (id) => {
     if (!id.trim()) return;
@@ -60,7 +63,7 @@ const OrderTracking = () => {
 
       {/* Search Box */}
       <div className="glass-card p-5 mb-8">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             id="order-search-input"
             type="text"
@@ -74,7 +77,7 @@ const OrderTracking = () => {
             id="order-search-btn"
             onClick={() => fetchOrder(inputId)}
             disabled={loading}
-            className="btn-primary px-6 flex items-center gap-2"
+            className="btn-primary px-6 py-3 sm:py-0 flex items-center justify-center gap-2"
             whileTap={{ scale: 0.95 }}
           >
             <Search size={16} />
@@ -98,9 +101,18 @@ const OrderTracking = () => {
                 <p className="text-gray-500 text-xs mb-1">Order ID</p>
                 <p className="text-festival-gold font-mono font-bold text-lg">{order.id}</p>
               </div>
-              <div className="text-right">
-                <p className="text-gray-500 text-xs mb-1">Total Amount</p>
-                <p className="text-white font-bold text-xl">₹{Number(order.totalAmount).toLocaleString()}</p>
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                <div>
+                  <p className="text-gray-500 text-xs mb-1">Total Amount</p>
+                  <p className="text-white font-bold text-xl">₹{Number(order.totalAmount).toLocaleString()}</p>
+                </div>
+                <button 
+                  onClick={() => setShowBillModal(true)}
+                  className="bg-white/10 hover:bg-white/20 border border-white/20 px-4 py-2 rounded-lg text-sm text-white flex items-center gap-2 transition-colors"
+                >
+                  <FileDown size={16} />
+                  View Bill
+                </button>
               </div>
             </div>
             <div className="border-t border-white/10 pt-4 grid grid-cols-2 gap-3 text-sm">
@@ -173,6 +185,12 @@ const OrderTracking = () => {
           )}
         </motion.div>
       )}
+
+      <BillPreviewModal 
+        isOpen={showBillModal} 
+        onClose={() => setShowBillModal(false)} 
+        order={order} 
+      />
     </div>
   );
 };

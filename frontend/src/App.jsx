@@ -6,7 +6,10 @@ import ProductCatalog from './pages/ProductCatalog';
 import Checkout from './pages/Checkout';
 import OrderTracking from './pages/OrderTracking';
 import AdminPanel from './pages/AdminPanel';
+import Contact from './pages/Contact';
+import SafetyTips from './pages/SafetyTips';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import Cart from './components/Cart';
 
 function App() {
@@ -26,9 +29,13 @@ function App() {
               <Route path="/products" element={<ProductCatalog />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/tracking" element={<OrderTracking />} />
+              <Route path="/contact" element={<Contact />} />
+              <Route path="/safety-tips" element={<SafetyTips />} />
               <Route path="/admin" element={<AdminPanel />} />
             </Routes>
           </main>
+
+          <Footer />
 
           <Cart isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
         </div>

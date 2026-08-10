@@ -15,7 +15,7 @@ const Navbar = ({ onCartClick }) => {
     fetch('http://localhost:5000/api/categories')
       .then(res => res.json())
       .then(data => setCategories(Array.isArray(data) ? data : ['All']))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Close dropdowns when route changes
@@ -38,16 +38,16 @@ const Navbar = ({ onCartClick }) => {
             <Zap size={18} className="text-black" fill="black" />
           </div>
           <span className="text-xl font-extrabold tracking-wide bg-clip-text text-transparent bg-gradient-to-r from-festival-gold to-festival-orange hidden sm:block">
-            CRACKERKING
+            MAGICAL CRACKERS
           </span>
         </Link>
 
         {/* Desktop Nav Links */}
         <div className="hidden md:flex gap-8 text-gray-300 text-sm font-medium items-center">
           <Link to="/" className="hover:text-festival-gold transition-colors">Home</Link>
-          
+
           {/* Products Dropdown */}
-          <div 
+          <div
             className="relative group"
             onMouseEnter={() => setShowDropdown(true)}
             onMouseLeave={() => setShowDropdown(false)}
@@ -55,7 +55,7 @@ const Navbar = ({ onCartClick }) => {
             <Link to="/products" className="hover:text-festival-gold transition-colors flex items-center gap-1 py-4">
               Products <ChevronDown size={14} className={`transition-transform duration-300 ${showDropdown ? 'rotate-180 text-festival-gold' : ''}`} />
             </Link>
-            
+
             <AnimatePresence>
               {showDropdown && (
                 <motion.div
@@ -80,6 +80,8 @@ const Navbar = ({ onCartClick }) => {
           </div>
 
           <Link to="/tracking" className="hover:text-festival-gold transition-colors">Track Order</Link>
+          <Link to="/contact" className="hover:text-festival-gold transition-colors">Contact</Link>
+          <Link to="/safety-tips" className="hover:text-festival-gold transition-colors">Safety Tips</Link>
         </div>
 
         {/* Cart & Mobile Toggle */}
@@ -104,7 +106,7 @@ const Navbar = ({ onCartClick }) => {
             </div>
             <span className="text-sm text-gray-300 group-hover:text-festival-gold transition-colors font-medium">Cart</span>
           </button>
-          <button 
+          <button
             className="md:hidden text-gray-300 hover:text-festival-gold shrink-0 p-1"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
@@ -145,6 +147,12 @@ const Navbar = ({ onCartClick }) => {
               </div>
               <Link to="/tracking" className="text-gray-300 hover:text-festival-gold text-lg font-medium transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
                 Track Order
+              </Link>
+              <Link to="/contact" className="text-gray-300 hover:text-festival-gold text-lg font-medium transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
+                Contact
+              </Link>
+              <Link to="/safety-tips" className="text-gray-300 hover:text-festival-gold text-lg font-medium transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
+                Safety Tips
               </Link>
             </div>
           </motion.div>

@@ -32,6 +32,7 @@ const AdminPanel = () => {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null);
+  const [showOrderStats, setShowOrderStats] = useState(false);
 
   // Products state
   const [products, setProducts] = useState([]);
@@ -157,6 +158,18 @@ const AdminPanel = () => {
         body: JSON.stringify({ status }),
       });
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    } catch {}
+    setUpdatingStatus(null);
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    if (!window.confirm(`Are you sure you want to delete order ${orderId}? This cannot be undone.`)) return;
+    setUpdatingStatus(orderId);
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/orders/${orderId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setOrders(prev => prev.filter(o => o.id !== orderId));
+      }
     } catch {}
     setUpdatingStatus(null);
   };
@@ -479,10 +492,14 @@ const AdminPanel = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
-        <div className="glass-card p-5 flex items-center gap-4">
+        <div 
+          onClick={() => setShowOrderStats(true)}
+          className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-festival-gold/30"
+          title="Click to view order breakdown"
+        >
           <span className="text-3xl">📦</span>
           <div>
-            <p className="text-gray-500 text-xs">Total Orders</p>
+            <p className="text-gray-500 text-xs group-hover:text-gray-300">Total Orders</p>
             <p className="text-white font-bold text-2xl">{orders.length}</p>
           </div>
         </div>
@@ -588,8 +605,11 @@ const AdminPanel = () => {
                       </span>
                     </div>
                     <p className="text-white font-semibold">{order.customerName}</p>
-                    <p className="text-gray-400 text-sm">{order.mobile} • {order.city}, {order.pincode}</p>
+                    <p className="text-gray-400 text-sm">
+                      {order.mobile} {order.whatsapp && order.whatsapp !== order.mobile ? `(WhatsApp: ${order.whatsapp})` : ''} • {order.city}, {order.pincode}
+                    </p>
                     <p className="text-gray-500 text-xs mt-1">{order.address}</p>
+                    {order.landmark && <p className="text-gray-500 text-xs mt-0.5">Landmark: {order.landmark}</p>}
                   </div>
 
                   <div className="flex-1 min-w-[150px]">
@@ -617,6 +637,15 @@ const AdminPanel = () => {
                         <option key={s} value={s} className="bg-[#0d0d14]">{s}</option>
                       ))}
                     </select>
+                    {order.status === 'Delivered' && (
+                      <button
+                        onClick={() => handleDeleteOrder(order.id)}
+                        disabled={updatingStatus === order.id}
+                        className="text-red-400 hover:text-red-300 text-xs font-semibold px-3 py-1.5 border border-red-500/30 bg-red-500/10 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Trash2 size={14} /> Delete Order
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -1154,6 +1183,55 @@ const AdminPanel = () => {
               </form>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Order Stats Modal */}
+      <AnimatePresence>
+        {showOrderStats && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="glass-card p-6 w-full max-w-sm relative"
+            >
+              <button 
+                onClick={() => setShowOrderStats(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <Package size={24} className="text-festival-gold" />
+                Order Breakdown
+              </h3>
+              
+              <div className="space-y-3">
+                {STATUSES.map(status => {
+                  const count = orders.filter(o => o.status === status).length;
+                  return (
+                    <div key={status} className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
+                      <span className={`text-sm font-semibold px-2 py-1 rounded-md border ${STATUS_COLORS[status] || 'bg-white/10 text-white'}`}>
+                        {status}
+                      </span>
+                      <span className="text-white font-bold text-lg">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Total Orders</span>
+                <span className="text-festival-gold font-bold text-xl">{orders.length}</span>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

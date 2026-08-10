@@ -96,6 +96,20 @@ const ensureTablesExist = async () => {
     } catch (e) {
       // Column already exists
     }
+
+    // Ensure landmark column exists in orders table
+    try {
+      await pool.query('ALTER TABLE orders ADD COLUMN landmark VARCHAR(255)');
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Ensure items column exists in orders table
+    try {
+      await pool.query('ALTER TABLE orders ADD COLUMN items JSON');
+    } catch (e) {
+      // Column already exists
+    }
   } catch (err) {
     console.error('Table check error:', err.message);
   }
@@ -265,7 +279,13 @@ app.get('/api/orders/:id', async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
     const order = rows[0];
-    order.items = JSON.parse(order.items || '[]');
+    let parsedItems = [];
+    if (typeof order.items === 'string') {
+      try { parsedItems = JSON.parse(order.items); } catch(e) {}
+    } else if (order.items) {
+      parsedItems = order.items;
+    }
+    order.items = parsedItems;
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -469,7 +489,15 @@ app.get('/api/admin/orders', async (req, res) => {
   try {
     await ensureTablesExist();
     const [rows] = await pool.query('SELECT * FROM orders ORDER BY createdAt DESC');
-    const orders = rows.map(o => ({ ...o, items: JSON.parse(o.items || '[]') }));
+    const orders = rows.map(o => {
+      let parsedItems = [];
+      if (typeof o.items === 'string') {
+        try { parsedItems = JSON.parse(o.items); } catch(e) {}
+      } else if (o.items) {
+        parsedItems = o.items;
+      }
+      return { ...o, items: parsedItems };
+    });
     res.json(orders);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -487,6 +515,17 @@ app.patch('/api/admin/orders/:id/status', async (req, res) => {
     }
     await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
     res.json({ success: true, message: 'Order status updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Delete Order (Admin) ────────────────────────────────────────────────────
+app.delete('/api/admin/orders/:id', async (req, res) => {
+  try {
+    await ensureTablesExist();
+    await pool.query('DELETE FROM orders WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'Order deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
