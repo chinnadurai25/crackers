@@ -90,6 +90,17 @@ const ensureTablesExist = async () => {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        setting_key VARCHAR(100) PRIMARY KEY,
+        setting_value TEXT
+      )
+    `);
+
+    await pool.query(`
+      INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('deliveryFee', '0')
+    `);
+
     // Ensure images column exists in products table
     try {
       await pool.query('ALTER TABLE products ADD COLUMN images JSON');
@@ -117,12 +128,52 @@ const ensureTablesExist = async () => {
     } catch (e) {
       // Column already exists
     }
+
+    // Ensure paymentProofUrl column exists in orders table
+    try {
+      await pool.query('ALTER TABLE orders ADD COLUMN paymentProofUrl TEXT');
+    } catch (e) {
+      // Column already exists
+    }
   } catch (err) {
     console.error('Table check error:', err.message);
   }
 };
 
 ensureTablesExist();
+
+// ─── Settings API ────────────────────────────────────────────────────────────
+app.get('/api/settings', async (req, res) => {
+  try {
+    await ensureTablesExist();
+    const [rows] = await pool.query('SELECT * FROM settings');
+    const settings = {};
+    rows.forEach(r => { settings[r.setting_key] = r.setting_value; });
+    res.json({ success: true, settings });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/admin/settings', async (req, res) => {
+  try {
+    await ensureTablesExist();
+    const { settings } = req.body;
+    if (!settings || typeof settings !== 'object') {
+      return res.status(400).json({ error: 'Invalid settings data' });
+    }
+    
+    for (const [key, value] of Object.entries(settings)) {
+      await pool.query(
+        'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+        [key, String(value), String(value)]
+      );
+    }
+    res.json({ success: true, message: 'Settings updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // ─── Health Check ────────────────────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
@@ -327,6 +378,25 @@ app.get('/api/orders/:id', async (req, res) => {
     order.items = parsedItems;
     order.statusHistory = parseOrderStatusHistory(order);
     res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Upload Payment Proof ────────────────────────────────────────────────────
+app.post('/api/orders/:id/payment-proof', upload.single('paymentProof'), async (req, res) => {
+  try {
+    await ensureTablesExist();
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+    
+    await pool.query('UPDATE orders SET paymentProofUrl = ? WHERE id = ?', [fileUrl, req.params.id]);
+    
+    res.json({ success: true, paymentProofUrl: fileUrl, message: 'Payment proof uploaded successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

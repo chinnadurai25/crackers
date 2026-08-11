@@ -6,7 +6,7 @@ import QuantitySelector from './QuantitySelector';
 import { useCart } from '../context/CartContext';
 
 const Cart = ({ isOpen, onClose }) => {
-  const { cartItems, cartTotal, removeFromCart, updateQuantity } = useCart();
+  const { cartItems, cartTotal, deliveryFee, removeFromCart, updateQuantity } = useCart();
 
   return (
     <AnimatePresence>
@@ -114,21 +114,40 @@ const Cart = ({ isOpen, onClose }) => {
                   </div>
                   <div className="flex justify-between text-gray-400 text-sm">
                     <span>Delivery</span>
-                    <span className="text-green-400">FREE</span>
+                    {deliveryFee > 0 ? (
+                      <span className="text-white">₹{deliveryFee.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-green-400">FREE</span>
+                    )}
                   </div>
                   <div className="flex justify-between text-festival-gold font-bold text-lg border-t border-white/10 pt-2 mt-1">
                     <span>Grand Total</span>
-                    <span>₹{cartTotal.toLocaleString()}</span>
+                    <span>₹{(cartTotal + (deliveryFee || 0)).toLocaleString()}</span>
                   </div>
                 </div>
 
-                <Link
-                  to="/checkout"
-                  onClick={onClose}
-                  className="btn-primary w-full text-center flex items-center justify-center gap-2"
-                >
-                  Proceed to Checkout <ArrowRight size={16} />
-                </Link>
+                {cartTotal < 3000 && (
+                  <p className="text-red-400 text-xs font-bold text-center mb-3 bg-red-500/10 p-2 rounded-lg border border-red-500/20">
+                    Minimum order amount is ₹3,000. Please add items worth ₹{(3000 - cartTotal).toLocaleString()} more to proceed.
+                  </p>
+                )}
+
+                {cartTotal >= 3000 ? (
+                  <Link
+                    to="/checkout"
+                    onClick={onClose}
+                    className="btn-primary w-full text-center flex items-center justify-center gap-2"
+                  >
+                    Proceed to Checkout <ArrowRight size={16} />
+                  </Link>
+                ) : (
+                  <button
+                    disabled
+                    className="btn-primary w-full text-center flex items-center justify-center gap-2 opacity-50 cursor-not-allowed"
+                  >
+                    Proceed to Checkout <ArrowRight size={16} />
+                  </button>
+                )}
               </div>
             )}
           </motion.div>

@@ -55,8 +55,21 @@ export const CartProvider = ({ children }) => {
   const cartCount = cartItems.length;
   const cartTotal = cartItems.reduce((sum, item) => sum + item.discountedPrice * item.quantity, 0);
 
+  const [deliveryFee, setDeliveryFee] = useState(0);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.settings && data.settings.deliveryFee !== undefined) {
+          setDeliveryFee(Number(data.settings.deliveryFee));
+        }
+      })
+      .catch(console.error);
+  }, []);
+
   return (
-    <CartContext.Provider value={{ cartItems, cartCount, cartTotal, addToCart, removeFromCart, updateQuantity, clearCart }}>
+    <CartContext.Provider value={{ cartItems, cartCount, cartTotal, deliveryFee, addToCart, removeFromCart, updateQuantity, clearCart }}>
       {children}
     </CartContext.Provider>
   );

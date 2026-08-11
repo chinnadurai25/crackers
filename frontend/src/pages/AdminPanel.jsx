@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2 } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings } from 'lucide-react';
 
 const STATUSES = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
 
@@ -92,6 +92,12 @@ const AdminPanel = () => {
   const [addProductError, setAddProductError] = useState('');
   const [addProductLoading, setAddProductLoading] = useState(false);
 
+  // Settings state
+  const [deliveryFee, setDeliveryFee] = useState('');
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [settingsError, setSettingsError] = useState('');
+
   // Login Handler
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -160,11 +166,23 @@ const AdminPanel = () => {
     setCategoriesLoading(false);
   };
 
+  // Fetch Settings
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/settings');
+      const data = await res.json();
+      if (data.success && data.settings) {
+        setDeliveryFee(data.settings.deliveryFee || '0');
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchOrders();
       fetchProducts();
       fetchCategories();
+      fetchSettings();
     }
   }, [isAuthenticated]);
 
@@ -206,6 +224,81 @@ const AdminPanel = () => {
       }
     } catch {}
     setUpdatingStatus(null);
+  };
+
+  const printAddressSlip = (order) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const itemsHtml = (order.items || []).map(item => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+      </tr>
+    `).join('');
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Slip - ${order.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #000; margin: 0; }
+            .slip { border: 2px solid #000; padding: 20px; max-width: 600px; margin: 0 auto; border-radius: 8px; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
+            .header h2 { margin: 0 0 5px 0; font-size: 24px; text-transform: uppercase; }
+            .content p { margin: 8px 0; font-size: 16px; line-height: 1.5; }
+            .label { font-weight: bold; width: 100px; display: inline-block; }
+            .items { margin-top: 20px; border-top: 1px dashed #000; padding-top: 15px; }
+            .items table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            .items th { text-align: left; padding: 8px; background-color: #f5f5f5; border-bottom: 2px solid #ddd; }
+            .items td { padding: 8px; border-bottom: 1px solid #eee; }
+            @media print {
+              body { padding: 0; }
+              .slip { border: none; max-width: 100%; }
+              @page { margin: 20mm; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="slip">
+            <div class="header">
+              <h2>MAGICAL CRACKERS</h2>
+              <p><strong>Order ID:</strong> ${order.id}</p>
+            </div>
+            <div class="content">
+              <h3>Shipping Address:</h3>
+              <p><span class="label">Name:</span> ${order.customerName}</p>
+              <p><span class="label">Mobile:</span> ${order.mobile}</p>
+              ${order.whatsapp && order.whatsapp !== order.mobile ? `<p><span class="label">WhatsApp:</span> ${order.whatsapp}</p>` : ''}
+              <p><span class="label">Address:</span> ${order.address}</p>
+              ${order.landmark ? `<p><span class="label">Landmark:</span> ${order.landmark}</p>` : ''}
+              <p><span class="label">City:</span> ${order.city} - ${order.pincode}</p>
+            </div>
+            <div class="items">
+              <h3>Order Details:</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th style="text-align: center; width: 80px;">Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${itemsHtml}
+                </tbody>
+              </table>
+              <h3 style="text-align: right; margin-top: 15px;">Total: ₹${Number(order.totalAmount).toLocaleString()}</h3>
+            </div>
+          </div>
+          <script>
+            window.onload = function() { setTimeout(function(){ window.print(); window.close(); }, 250); }
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
   };
 
   // Category CRUD Handlers
@@ -421,6 +514,29 @@ const AdminPanel = () => {
     setDeletingProductId(null);
   };
 
+  const handleUpdateSettings = async (e) => {
+    e.preventDefault();
+    setSettingsLoading(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { deliveryFee } })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setSettingsSuccess('Settings updated successfully!');
+      } else {
+        setSettingsError(data.error || 'Failed to update settings');
+      }
+    } catch {
+      setSettingsError('Could not connect to server.');
+    }
+    setSettingsLoading(false);
+  };
+
   const totalRevenue = orders.filter(o => o.status !== 'Order Received').reduce((s, o) => s + Number(o.totalAmount), 0);
 
   // ─── LOGIN SCREEN ────────────────────────────────────────────────────────────
@@ -605,6 +721,17 @@ const AdminPanel = () => {
         >
           <Plus size={16} /> Add Product
         </button>
+
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+            activeTab === 'settings'
+              ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
+              : 'text-gray-400 hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Settings size={16} /> Settings
+        </button>
       </div>
 
       {/* Tab 1: Orders List */}
@@ -661,6 +788,24 @@ const AdminPanel = () => {
                       <p className="text-festival-gold font-bold text-xl">₹{Number(order.totalAmount).toLocaleString()}</p>
                     </div>
                     <div className="flex flex-wrap justify-end items-center gap-2">
+                      {order.paymentProofUrl && (
+                        <a
+                          href={order.paymentProofUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-festival-gold hover:text-white text-xs font-semibold px-3 py-1.5 border border-festival-gold/30 bg-festival-gold/10 hover:bg-festival-gold/20 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                          title="View Payment Proof"
+                        >
+                          <Images size={14} /> View Proof
+                        </a>
+                      )}
+                      <button
+                        onClick={() => printAddressSlip(order)}
+                        className="text-green-400 hover:text-green-300 text-xs font-semibold px-3 py-1.5 border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                        title="Print Courier Slip"
+                      >
+                        <Printer size={14} /> Print Slip
+                      </button>
                       <button
                         id={`view-dates-${order.id}`}
                         onClick={() => setSelectedStatusOrder(order)}
@@ -1359,6 +1504,51 @@ const AdminPanel = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Tab 5: Settings */}
+      {activeTab === 'settings' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-xl mx-auto"
+        >
+          <div className="glass-card p-8 border-white/10">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <Settings size={20} className="text-festival-gold" /> Global Settings
+            </h3>
+            
+            {settingsSuccess && <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-sm">{settingsSuccess}</div>}
+            {settingsError && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm">{settingsError}</div>}
+
+            <form onSubmit={handleUpdateSettings} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-gray-300 text-sm font-medium">Delivery Fee (₹)</label>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    value={deliveryFee}
+                    onChange={(e) => setDeliveryFee(e.target.value)}
+                    className={inputClass}
+                    placeholder="Enter delivery amount e.g. 250"
+                  />
+                </div>
+                <p className="text-gray-500 text-xs mt-1">This fee will be automatically applied to all new orders during checkout.</p>
+              </div>
+
+              <div className="pt-4 border-t border-white/10">
+                <button
+                  type="submit"
+                  disabled={settingsLoading}
+                  className="btn-primary w-full flex items-center justify-center gap-2"
+                >
+                  {settingsLoading ? 'Saving...' : 'Save Settings'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </motion.div>
+      )}
+
     </div>
   );
 };
