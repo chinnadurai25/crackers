@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Flame, Sparkles, Gift } from 'lucide-react';
 import FireworksCanvas from './FireworksCanvas';
 
 const Hero = () => {
@@ -32,8 +32,8 @@ const Hero = () => {
 
   const itemVariants = {
     hidden: { opacity: 0, y: 50 },
-    visible: { 
-      opacity: 1, 
+    visible: {
+      opacity: 1,
       y: 0,
       transition: { type: "spring", stiffness: 100, damping: 10 }
     }
@@ -42,7 +42,7 @@ const Hero = () => {
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 pb-32">
       {/* Background Animated Gradients */}
-      <motion.div 
+      <motion.div
         className="absolute inset-0 z-0 opacity-40"
         animate={{
           background: [
@@ -56,8 +56,30 @@ const Hero = () => {
       />
       {/* Fireworks Animation Background */}
       <FireworksCanvas />
-      <motion.div 
-        className="relative z-10 text-center px-6 max-w-5xl mx-auto"
+
+      {/* Floating Elements */}
+      <motion.div
+        animate={{ y: [0, -20, 0], rotate: [0, 10, -10, 0] }}
+        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute top-[20%] left-[15%] text-festival-gold/40 hidden md:block z-0 blur-[1px]"
+      >
+        <Flame size={56} />
+      </motion.div>
+      <motion.div
+        animate={{ y: [0, 30, 0], rotate: [0, -15, 15, 0] }}
+        transition={{ duration: 7, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+        className="absolute top-[25%] right-[15%] text-festival-orange/40 hidden md:block z-0 blur-[1px]"
+      >
+        <Sparkles size={72} />
+      </motion.div>
+      <motion.div
+        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute bottom-[30%] left-[20%] w-32 h-32 bg-festival-gold/20 rounded-full blur-[50px] z-0"
+      ></motion.div>
+
+      <motion.div
+        className="relative z-10 text-center px-6 max-w-5xl mx-auto mt-8"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -68,23 +90,23 @@ const Hero = () => {
           </span>
         </motion.div>
 
-        <motion.h1 
+        <motion.h1
           variants={itemVariants}
           className="text-6xl md:text-8xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-festival-gold via-white to-festival-orange mb-6 neon-text-gold leading-tight"
         >
-          Illuminate Your <br/>
+          Illuminate Your <br />
           <span className="text-white">Moments</span>
         </motion.h1>
-        
-        <motion.p 
+
+        <motion.p
           variants={itemVariants}
           className="text-lg md:text-2xl text-gray-300 mb-8 font-light max-w-2xl mx-auto"
         >
           Experience the magic of light and sound with our premium, eco-friendly fireworks collection.
         </motion.p>
-        
+
         {/* Search Bar in Hero */}
-        <motion.form 
+        <motion.form
           variants={itemVariants}
           onSubmit={handleSearchSubmit}
           className="max-w-xl mx-auto mb-10 relative flex items-center"
@@ -109,15 +131,26 @@ const Hero = () => {
           </div>
         </motion.form>
 
-        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center gap-6">
-          <Link to="/products" className="w-full sm:w-auto">
-            <motion.button 
+        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center gap-6 relative mt-6">
+
+          <motion.div
+            animate={{ y: [0, -10, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-12 sm:-top-16 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-festival-gold to-festival-orange text-black text-xs font-black px-4 py-2 rounded-full flex items-center gap-1.5 shadow-[0_0_20px_rgba(255,215,0,0.6)] border border-white/40 whitespace-nowrap z-20"
+          >
+            <Gift size={16} className="animate-pulse text-red-700" />
+            MEGA DIWALI SALE - 70% OFF!
+            <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-festival-orange rotate-45 z-[-1]"></div>
+          </motion.div>
+
+          <Link to="/products" className="w-full sm:w-auto relative z-10">
+            <motion.button
               className="btn-primary text-lg px-10 py-4 w-full flex items-center justify-center gap-2 group"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
               <span>Shop Collection</span>
-              <motion.span 
+              <motion.span
                 className="inline-block"
                 animate={{ x: [0, 5, 0] }}
                 transition={{ repeat: Infinity, duration: 1.5 }}
@@ -128,7 +161,7 @@ const Hero = () => {
           </Link>
 
           <a href="#shop" className="w-full sm:w-auto">
-            <motion.button 
+            <motion.button
               className="text-white font-bold text-lg px-8 py-4 border border-white/20 rounded-full hover:bg-white/10 transition-colors w-full sm:w-auto backdrop-blur-sm"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -140,7 +173,7 @@ const Hero = () => {
       </motion.div>
 
       {/* Mouse scroll indicator */}
-      <motion.div 
+      <motion.div
         className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -148,7 +181,7 @@ const Hero = () => {
       >
         <span className="text-gray-400 text-xs tracking-widest uppercase">Scroll Down</span>
         <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center p-1">
-          <motion.div 
+          <motion.div
             className="w-1.5 h-1.5 bg-festival-gold rounded-full"
             animate={{ y: [0, 15, 0], opacity: [1, 0, 1] }}
             transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}

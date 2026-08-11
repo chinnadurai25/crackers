@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { ShoppingBag, Star, ChevronLeft, ChevronRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShoppingBag, Star, ChevronLeft, ChevronRight, X, Maximize2 } from 'lucide-react';
 import QuantitySelector from './QuantitySelector';
 import { useCart } from '../context/CartContext';
 
@@ -13,6 +14,7 @@ const ProductCard = ({ product }) => {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
+  const [showImageModal, setShowImageModal] = useState(false);
   const { addToCart } = useCart();
 
   const handleAddToCart = () => {
@@ -57,14 +59,26 @@ const ProductCard = ({ product }) => {
       )}
 
       {/* Product Image Carousel — fixed uniform height, object-cover for consistent look */}
-      <div className="w-full h-56 bg-black overflow-hidden relative flex-shrink-0 rounded-t-2xl">
+      <div 
+        className="w-full h-56 bg-black overflow-hidden relative flex-shrink-0 rounded-t-2xl cursor-pointer"
+        onClick={() => {
+          if (imagesList.length > 0) setShowImageModal(true);
+        }}
+      >
         {imagesList.length > 0 ? (
-          <img
-            src={imagesList[currentImgIndex]}
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
+          <>
+            <img
+              src={imagesList[currentImgIndex]}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              onError={(e) => { e.target.style.display = 'none'; }}
+            />
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+              <div className="bg-black/50 p-3 rounded-full backdrop-blur-sm border border-white/20">
+                <Maximize2 size={24} className="text-white" />
+              </div>
+            </div>
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center text-6xl bg-white/5">
             🎆
@@ -156,6 +170,54 @@ const ProductCard = ({ product }) => {
           </motion.button>
         </div>
       </div>
+
+      {/* Image Modal via Portal */}
+      {showImageModal && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/95 p-4 backdrop-blur-md"
+          onClick={() => setShowImageModal(false)}
+        >
+          <button 
+            className="absolute top-6 right-6 text-white/70 hover:text-white transition-colors bg-white/10 hover:bg-white/20 p-2 rounded-full backdrop-blur-md border border-white/10"
+            onClick={(e) => { e.stopPropagation(); setShowImageModal(false); }}
+          >
+            <X size={24} />
+          </button>
+          
+          <img 
+            src={imagesList[currentImgIndex]} 
+            alt={product.name} 
+            className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" 
+            onClick={(e) => e.stopPropagation()} 
+          />
+          
+          {/* Controls in Modal if multiple images */}
+          {imagesList.length > 1 && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImgIndex((prev) => (prev - 1 + imagesList.length) % imagesList.length);
+                }}
+                className="absolute left-6 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-4 rounded-full transition-all border border-white/10 backdrop-blur-md"
+              >
+                <ChevronLeft size={28} />
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentImgIndex((prev) => (prev + 1) % imagesList.length);
+                }}
+                className="absolute right-6 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/80 text-white p-4 rounded-full transition-all border border-white/10 backdrop-blur-md"
+              >
+                <ChevronRight size={28} />
+              </button>
+            </>
+          )}
+        </div>,
+        document.body
+      )}
     </motion.div>
   );
 };

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { CartProvider } from './context/CartContext';
 import Hero from './components/Hero';
 import ProductCatalog from './pages/ProductCatalog';
+import HomeShowcase from './pages/HomeShowcase';
 import Checkout from './pages/Checkout';
 import OrderTracking from './pages/OrderTracking';
 import AdminPanel from './pages/AdminPanel';
@@ -25,7 +26,7 @@ function App() {
 
           <main className="flex-grow pt-20">
             <Routes>
-              <Route path="/" element={<><Hero /><ProductCatalog /></>} />
+              <Route path="/" element={<><Hero /><HomeShowcase /></>} />
               <Route path="/products" element={<ProductCatalog />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/tracking" element={<OrderTracking />} />
