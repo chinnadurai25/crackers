@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2 } from 'lucide-react';
 
 const STATUSES = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
 
@@ -13,6 +13,25 @@ const STATUS_COLORS = {
 };
 
 const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-festival-gold transition-colors";
+
+const formatStatusDate = (dateStr) => {
+  if (!dateStr) return 'Pending';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return dateStr;
+  }
+};
 
 const AdminPanel = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
@@ -33,6 +52,7 @@ const AdminPanel = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [showOrderStats, setShowOrderStats] = useState(false);
+  const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
 
   // Products state
   const [products, setProducts] = useState([]);
@@ -152,12 +172,26 @@ const AdminPanel = () => {
   const updateStatus = async (orderId, status) => {
     setUpdatingStatus(orderId);
     try {
-      await fetch(`http://localhost:5000/api/admin/orders/${orderId}/status`, {
+      const res = await fetch(`http://localhost:5000/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       });
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+      const data = await res.json();
+      setOrders(prev => prev.map(o => {
+        if (o.id === orderId) {
+          const updatedHistory = data.statusHistory || o.statusHistory || [];
+          return { ...o, status, statusHistory: updatedHistory };
+        }
+        return o;
+      }));
+      if (selectedStatusOrder && selectedStatusOrder.id === orderId) {
+        setSelectedStatusOrder(prev => ({
+          ...prev,
+          status,
+          statusHistory: data.statusHistory || prev.statusHistory
+        }));
+      }
     } catch {}
     setUpdatingStatus(null);
   };
@@ -621,22 +655,32 @@ const AdminPanel = () => {
                     ))}
                   </div>
 
-                  <div className="text-right flex flex-col items-end gap-3">
+                  <div className="text-right flex flex-col items-end gap-2.5">
                     <div>
                       <p className="text-gray-500 text-xs">Total Amount</p>
                       <p className="text-festival-gold font-bold text-xl">₹{Number(order.totalAmount).toLocaleString()}</p>
                     </div>
-                    <select
-                      id={`status-${order.id}`}
-                      value={order.status}
-                      onChange={(e) => updateStatus(order.id, e.target.value)}
-                      disabled={updatingStatus === order.id}
-                      className="bg-white/5 border border-white/15 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-festival-gold cursor-pointer"
-                    >
-                      {STATUSES.map(s => (
-                        <option key={s} value={s} className="bg-[#0d0d14]">{s}</option>
-                      ))}
-                    </select>
+                    <div className="flex flex-wrap justify-end items-center gap-2">
+                      <button
+                        id={`view-dates-${order.id}`}
+                        onClick={() => setSelectedStatusOrder(order)}
+                        className="text-blue-400 hover:text-blue-300 text-xs font-semibold px-3 py-1.5 border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                        title="View status dates timeline"
+                      >
+                        <Eye size={14} /> View Status Dates
+                      </button>
+                      <select
+                        id={`status-${order.id}`}
+                        value={order.status}
+                        onChange={(e) => updateStatus(order.id, e.target.value)}
+                        disabled={updatingStatus === order.id}
+                        className="bg-white/5 border border-white/15 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-festival-gold cursor-pointer"
+                      >
+                        {STATUSES.map(s => (
+                          <option key={s} value={s} className="bg-[#0d0d14]">{s}</option>
+                        ))}
+                      </select>
+                    </div>
                     {order.status === 'Delivered' && (
                       <button
                         onClick={() => handleDeleteOrder(order.id)}
@@ -1232,6 +1276,87 @@ const AdminPanel = () => {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* STATUS DATES TIMELINE MODAL */}
+      <AnimatePresence>
+        {selectedStatusOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 md:p-8 w-full max-w-lg bg-[#0d0d14] border-white/20 shadow-2xl relative my-8"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Calendar className="text-festival-gold" size={20} /> Order Status Timeline
+                  </h3>
+                  <p className="text-xs text-festival-gold font-mono font-semibold mt-1">
+                    Order ID: {selectedStatusOrder.id} • {selectedStatusOrder.customerName}
+                  </p>
+                </div>
+                <button
+                  id="close-status-timeline-btn"
+                  onClick={() => setSelectedStatusOrder(null)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4 relative">
+                <div className="absolute left-6 top-3 bottom-3 w-0.5 bg-white/10" />
+                {STATUSES.map((statusName, idx) => {
+                  const historyObj = (selectedStatusOrder.statusHistory || []).find(h => h.status === statusName);
+                  const isCurrent = selectedStatusOrder.status === statusName;
+                  const isCompleted = !!historyObj;
+
+                  return (
+                    <div key={statusName} className="flex items-start gap-4 relative z-10 pl-2">
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border transition-all ${
+                        isCurrent
+                          ? 'bg-festival-gold text-black border-festival-gold shadow-[0_0_12px_rgba(255,215,0,0.5)] scale-110'
+                          : isCompleted
+                          ? 'bg-green-500/20 text-green-400 border-green-500/40'
+                          : 'bg-white/5 text-gray-500 border-white/10'
+                      }`}>
+                        {isCompleted ? <CheckCircle2 size={16} /> : idx + 1}
+                      </div>
+                      <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className={`font-bold text-sm ${isCurrent ? 'text-festival-gold' : isCompleted ? 'text-white' : 'text-gray-500'}`}>
+                            {statusName}
+                          </span>
+                          {isCurrent && (
+                            <span className="text-[10px] bg-festival-gold/20 text-festival-gold border border-festival-gold/30 px-2 py-0.5 rounded-full font-bold uppercase">
+                              Current Status
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                          <Clock size={13} className={isCompleted ? "text-green-400" : "text-gray-600"} />
+                          <span>{isCompleted ? formatStatusDate(historyObj.date) : 'Pending'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-white/10 text-right">
+                <button
+                  id="close-timeline-modal-btn"
+                  onClick={() => setSelectedStatusOrder(null)}
+                  className="btn-primary text-xs px-5 py-2"
+                >
+                  Close Timeline
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

@@ -1,9 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import FireworksCanvas from './FireworksCanvas';
 
 const Hero = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const navigate = useNavigate();
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (!searchTerm.trim()) return;
+    navigate(`/?search=${encodeURIComponent(searchTerm.trim())}#shop`);
+    const shopElem = document.getElementById('shop');
+    if (shopElem) {
+      shopElem.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   // Staggered text animation variants
   const containerVariants = {
@@ -65,11 +78,37 @@ const Hero = () => {
         
         <motion.p 
           variants={itemVariants}
-          className="text-lg md:text-2xl text-gray-300 mb-10 font-light max-w-2xl mx-auto"
+          className="text-lg md:text-2xl text-gray-300 mb-8 font-light max-w-2xl mx-auto"
         >
           Experience the magic of light and sound with our premium, eco-friendly fireworks collection.
         </motion.p>
         
+        {/* Search Bar in Hero */}
+        <motion.form 
+          variants={itemVariants}
+          onSubmit={handleSearchSubmit}
+          className="max-w-xl mx-auto mb-10 relative flex items-center"
+        >
+          <div className="relative w-full">
+            <input
+              id="hero-search-input"
+              type="text"
+              placeholder="Search fireworks, sparklers, sky shots..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white/10 backdrop-blur-xl border border-white/20 hover:border-festival-gold/50 focus:border-festival-gold rounded-full py-4 pl-14 pr-32 text-white placeholder-gray-400 focus:outline-none shadow-[0_0_25px_rgba(0,0,0,0.5)] transition-all text-base"
+            />
+            <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-festival-gold" size={22} />
+            <button
+              id="hero-search-btn"
+              type="submit"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-festival-gold hover:bg-yellow-400 text-black font-bold px-6 py-2.5 rounded-full text-sm transition-all shadow-[0_0_15px_rgba(255,215,0,0.4)]"
+            >
+              Search
+            </button>
+          </div>
+        </motion.form>
+
         <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center gap-6">
           <Link to="/products" className="w-full sm:w-auto">
             <motion.button 
@@ -88,13 +127,15 @@ const Hero = () => {
             </motion.button>
           </Link>
 
-          <motion.button 
-            className="text-white font-bold text-lg px-8 py-4 border border-white/20 rounded-full hover:bg-white/10 transition-colors w-full sm:w-auto backdrop-blur-sm"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            View Offers
-          </motion.button>
+          <a href="#shop" className="w-full sm:w-auto">
+            <motion.button 
+              className="text-white font-bold text-lg px-8 py-4 border border-white/20 rounded-full hover:bg-white/10 transition-colors w-full sm:w-auto backdrop-blur-sm"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Explore Products
+            </motion.button>
+          </a>
         </motion.div>
       </motion.div>
 

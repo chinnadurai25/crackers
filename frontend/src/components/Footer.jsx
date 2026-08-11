@@ -20,7 +20,7 @@ const Footer = () => {
               </span>
             </Link>
             <p className="text-gray-400 text-sm leading-relaxed">
-              Experience the magic of festivals with our premium, safe, and high-quality crackers. Lighting up your celebrations with joy and brilliance.
+              As per 2018 supreme court order, online sale of firecrackers are not permitted! We value our customers and at the same time, respect jurisdiction. We request you to add your products to the cart and submit the required crackers through the enquiry button. We will contact you within 24 hrs and confirm the order through WhatsApp or phone call. Please add and submit your enquiries and enjoy your Diwali with Magical Crackers. Our License No.409/2026, dt 08-06-2026, GST No 33ACEFM2612C1ZX. Magical Crackers as a company following 100% legal & statutory compliances and all our shops, go-downs are maintained as per the explosive acts. We send the parcels through registered and legal transport service providers as like every other major companies in Sivakasi is doing so
             </p>
             <div className="flex items-center gap-4 mt-2">
               <a href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-gray-400 hover:bg-festival-gold/20 hover:text-festival-gold transition-all duration-300">

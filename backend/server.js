@@ -110,6 +110,13 @@ const ensureTablesExist = async () => {
     } catch (e) {
       // Column already exists
     }
+
+    // Ensure statusHistory column exists in orders table
+    try {
+      await pool.query('ALTER TABLE orders ADD COLUMN statusHistory JSON');
+    } catch (e) {
+      // Column already exists
+    }
   } catch (err) {
     console.error('Table check error:', err.message);
   }
@@ -128,16 +135,21 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ─── Get All Products (with optional category filter) ────────────────────────
+// ─── Get All Products (with optional category and search filter) ────────────
 app.get('/api/products', async (req, res) => {
   try {
     await ensureTablesExist();
-    const { category } = req.query;
+    const { category, search } = req.query;
     let query = 'SELECT * FROM products WHERE stock > 0';
     const params = [];
     if (category && category !== 'All') {
       query += ' AND category = ?';
       params.push(category);
+    }
+    if (search && search.trim()) {
+      query += ' AND (name LIKE ? OR description LIKE ? OR category LIKE ?)';
+      const term = `%${search.trim()}%`;
+      params.push(term, term, term);
     }
     query += ' ORDER BY createdAt DESC';
     const [rows] = await pool.query(query, params);
@@ -245,6 +257,32 @@ app.delete('/api/admin/categories/:id', async (req, res) => {
   }
 });
 
+// Helper to safely parse order status history
+const parseOrderStatusHistory = (order) => {
+  let parsedHistory = [];
+  if (typeof order.statusHistory === 'string') {
+    try { parsedHistory = JSON.parse(order.statusHistory); } catch (e) {}
+  } else if (Array.isArray(order.statusHistory)) {
+    parsedHistory = order.statusHistory;
+  }
+
+  // Ensure parsedHistory is always an array
+  if (!Array.isArray(parsedHistory)) parsedHistory = [];
+
+  // Build the fallback "Order Received" date from createdAt
+  const orderReceivedDate = order.createdAt
+    ? (order.createdAt instanceof Date ? order.createdAt.toISOString() : String(order.createdAt))
+    : new Date().toISOString();
+
+  // Always ensure "Order Received" entry exists with real createdAt date
+  const hasOrderReceived = parsedHistory.some(h => h.status === 'Order Received');
+  if (!hasOrderReceived) {
+    parsedHistory = [{ status: 'Order Received', date: orderReceivedDate }, ...parsedHistory];
+  }
+
+  return parsedHistory;
+};
+
 // ─── Create Order ────────────────────────────────────────────────────────────
 app.post('/api/orders', async (req, res) => {
   try {
@@ -256,12 +294,13 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const orderId = 'CRK' + new Date().getFullYear() + String(Math.floor(10000 + Math.random() * 90000));
+    const initialHistory = [{ status: 'Order Received', date: new Date().toISOString() }];
 
     await pool.query(
       `INSERT INTO orders 
-        (id, customerName, mobile, whatsapp, address, landmark, city, pincode, items, totalAmount, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Order Received')`,
-      [orderId, customerName, mobile, whatsapp || mobile, address, landmark || '', city, pincode, JSON.stringify(items), totalAmount]
+        (id, customerName, mobile, whatsapp, address, landmark, city, pincode, items, totalAmount, status, statusHistory) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Order Received', ?)`,
+      [orderId, customerName, mobile, whatsapp || mobile, address, landmark || '', city, pincode, JSON.stringify(items), totalAmount, JSON.stringify(initialHistory)]
     );
 
     res.json({ success: true, orderId, message: 'Order placed successfully!' });
@@ -286,6 +325,7 @@ app.get('/api/orders/:id', async (req, res) => {
       parsedItems = order.items;
     }
     order.items = parsedItems;
+    order.statusHistory = parseOrderStatusHistory(order);
     res.json(order);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -496,7 +536,11 @@ app.get('/api/admin/orders', async (req, res) => {
       } else if (o.items) {
         parsedItems = o.items;
       }
-      return { ...o, items: parsedItems };
+      return { 
+        ...o, 
+        items: parsedItems,
+        statusHistory: parseOrderStatusHistory(o)
+      };
     });
     res.json(orders);
   } catch (error) {
@@ -513,8 +557,24 @@ app.patch('/api/admin/orders/:id/status', async (req, res) => {
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
-    await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, req.params.id]);
-    res.json({ success: true, message: 'Order status updated' });
+
+    const [rows] = await pool.query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    const order = rows[0];
+    let history = parseOrderStatusHistory(order);
+
+    const existingIndex = history.findIndex(h => h.status === status);
+    const nowIso = new Date().toISOString();
+    if (existingIndex >= 0) {
+      history[existingIndex].date = nowIso;
+    } else {
+      history.push({ status, date: nowIso });
+    }
+
+    await pool.query('UPDATE orders SET status = ?, statusHistory = ? WHERE id = ?', [status, JSON.stringify(history), req.params.id]);
+    res.json({ success: true, message: 'Order status updated', statusHistory: history });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
