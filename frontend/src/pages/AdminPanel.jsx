@@ -54,6 +54,7 @@ const AdminPanel = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [showOrderStats, setShowOrderStats] = useState(false);
+  const [showRevenueStats, setShowRevenueStats] = useState(false);
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
   const [selectedBillOrder, setSelectedBillOrder] = useState(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
@@ -544,7 +545,18 @@ const AdminPanel = () => {
     setSettingsLoading(false);
   };
 
-  const totalRevenue = orders.filter(o => o.status !== 'Order Received').reduce((s, o) => s + Number(o.totalAmount), 0);
+  const validOrders = orders.filter(o => o.status !== 'Order Received');
+  const totalRevenue = validOrders.reduce((s, o) => s + Number(o.totalAmount), 0);
+
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay());
+  startOfWeek.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const currentMonthName = now.toLocaleString('default', { month: 'long' });
+
+  const weeklyRevenue = validOrders.filter(o => new Date(o.createdAt || o.statusHistory?.[0]?.date) >= startOfWeek).reduce((s, o) => s + Number(o.totalAmount), 0);
+  const monthlyRevenue = validOrders.filter(o => new Date(o.createdAt || o.statusHistory?.[0]?.date) >= startOfMonth).reduce((s, o) => s + Number(o.totalAmount), 0);
 
   // Status & Customer Breakdown Stats
   const orderReceivedCount = orders.filter(o => o.status === 'Order Received').length;
@@ -552,7 +564,6 @@ const AdminPanel = () => {
   const packingCount = orders.filter(o => o.status === 'Packing').length;
   const shippedCount = orders.filter(o => o.status === 'Shipped').length;
   const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
-  const uniqueCustomersCount = new Set(orders.map(o => (o.mobile || o.customerName || '').trim().toLowerCase()).filter(Boolean)).size;
 
   const filteredOrders = orderStatusFilter === 'ALL'
     ? orders
@@ -660,7 +671,7 @@ const AdminPanel = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
         <div
           onClick={() => setShowOrderStats(true)}
           className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-festival-gold/30"
@@ -686,14 +697,6 @@ const AdminPanel = () => {
         </div>
 
         <div className="glass-card p-5 flex items-center gap-4">
-          <span className="text-3xl">👥</span>
-          <div>
-            <p className="text-gray-400 text-xs font-medium">Total Customers</p>
-            <p className="text-festival-gold font-bold text-2xl">{uniqueCustomersCount}</p>
-          </div>
-        </div>
-
-        <div className="glass-card p-5 flex items-center gap-4">
           <span className="text-3xl">🎆</span>
           <div>
             <p className="text-gray-400 text-xs font-medium">Live Products</p>
@@ -701,10 +704,14 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        <div className="glass-card p-5 flex items-center gap-4">
+        <div 
+          onClick={() => setShowRevenueStats(true)}
+          className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-emerald-500/30"
+          title="Click to view revenue breakdown"
+        >
           <span className="text-3xl">💰</span>
           <div>
-            <p className="text-gray-400 text-xs font-medium">Verified Revenue</p>
+            <p className="text-gray-400 text-xs group-hover:text-gray-300 font-medium">Verified Revenue</p>
             <p className="text-emerald-400 font-bold text-2xl">₹{totalRevenue.toLocaleString()}</p>
           </div>
         </div>
@@ -772,10 +779,6 @@ const AdminPanel = () => {
               <div className="flex items-center gap-2">
                 <Filter size={18} className="text-festival-gold" />
                 <h3 className="text-white font-bold text-sm">Filter Orders by Status</h3>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
-                <Users size={14} className="text-festival-gold" />
-                <span>Total Customers: <strong className="text-white font-bold">{uniqueCustomersCount}</strong></span>
               </div>
             </div>
 
@@ -1573,6 +1576,56 @@ const AdminPanel = () => {
               <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Total Orders</span>
                 <span className="text-festival-gold font-bold text-xl">{orders.length}</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Revenue Stats Modal */}
+      <AnimatePresence>
+        {showRevenueStats && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="glass-card p-6 w-full max-w-sm relative"
+            >
+              <button
+                onClick={() => setShowRevenueStats(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+              <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                <span className="text-2xl">💰</span>
+                Revenue Breakdown
+              </h3>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
+                  <span className="text-sm font-semibold px-2 py-1 rounded-md border bg-blue-500/20 text-blue-300 border-blue-500/30">
+                    This Week
+                  </span>
+                  <span className="text-emerald-400 font-bold text-lg">₹{weeklyRevenue.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-xl border border-white/10">
+                  <span className="text-sm font-semibold px-2 py-1 rounded-md border bg-purple-500/20 text-purple-300 border-purple-500/30">
+                    This Month ({currentMonthName})
+                  </span>
+                  <span className="text-emerald-400 font-bold text-lg">₹{monthlyRevenue.toLocaleString()}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Total Revenue</span>
+                <span className="text-emerald-400 font-bold text-xl">₹{totalRevenue.toLocaleString()}</span>
               </div>
             </motion.div>
           </motion.div>
