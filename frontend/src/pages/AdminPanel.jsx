@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings, FileText, Users, Truck, CreditCard, Filter } from 'lucide-react';
+import { API_BASE_URL } from '../utils/apiConfig';
+import BillPreviewModal from '../components/BillPreviewModal';
 
 const STATUSES = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
 
@@ -53,6 +55,8 @@ const AdminPanel = () => {
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [showOrderStats, setShowOrderStats] = useState(false);
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
+  const [selectedBillOrder, setSelectedBillOrder] = useState(null);
+  const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
 
   // Products state
   const [products, setProducts] = useState([]);
@@ -104,7 +108,7 @@ const AdminPanel = () => {
     setLoginLoading(true);
     setLoginError('');
     try {
-      const res = await fetch('http://localhost:5000/api/admin/login', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
@@ -131,7 +135,7 @@ const AdminPanel = () => {
   const fetchOrders = async () => {
     setOrdersLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/orders');
+      const res = await fetch(`${API_BASE_URL}/api/admin/orders`);
       const data = await res.json();
       setOrders(Array.isArray(data) ? data : []);
     } catch {
@@ -144,7 +148,7 @@ const AdminPanel = () => {
   const fetchProducts = async () => {
     setProductsLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/products');
+      const res = await fetch(`${API_BASE_URL}/api/products`);
       const data = await res.json();
       setProducts(Array.isArray(data) ? data : []);
     } catch {
@@ -157,7 +161,7 @@ const AdminPanel = () => {
   const fetchCategories = async () => {
     setCategoriesLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/admin/categories');
+      const res = await fetch(`${API_BASE_URL}/api/admin/categories`);
       const data = await res.json();
       setCategories(Array.isArray(data) ? data : []);
     } catch {
@@ -169,7 +173,7 @@ const AdminPanel = () => {
   // Fetch Settings
   const fetchSettings = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/settings');
+      const res = await fetch(`${API_BASE_URL}/api/settings`);
       const data = await res.json();
       if (data.success && data.settings) {
         setDeliveryFee(data.settings.deliveryFee || '0');
@@ -190,7 +194,7 @@ const AdminPanel = () => {
   const updateStatus = async (orderId, status) => {
     setUpdatingStatus(orderId);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/orders/${orderId}/status`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -218,7 +222,7 @@ const AdminPanel = () => {
     if (!window.confirm(`Are you sure you want to delete order ${orderId}? This cannot be undone.`)) return;
     setUpdatingStatus(orderId);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/orders/${orderId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/admin/orders/${orderId}`, { method: 'DELETE' });
       if (res.ok) {
         setOrders(prev => prev.filter(o => o.id !== orderId));
       }
@@ -309,7 +313,7 @@ const AdminPanel = () => {
     setCategoryError('');
     setCategorySuccess('');
     try {
-      const res = await fetch('http://localhost:5000/api/admin/categories', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCategoryName.trim() })
@@ -332,7 +336,7 @@ const AdminPanel = () => {
     if (!newName.trim()) return;
     setCategoryActionLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/categories/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/categories/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName.trim() })
@@ -350,7 +354,7 @@ const AdminPanel = () => {
     if (!window.confirm('Are you sure you want to delete this category? Products in it will become Uncategorized.')) return;
     setCategoryActionLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/categories/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/admin/categories/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchCategories();
         fetchProducts();
@@ -406,7 +410,7 @@ const AdminPanel = () => {
         imageFiles.forEach(file => formData.append('productImages', file));
       }
 
-      const res = await fetch('http://localhost:5000/api/admin/products', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/products`, {
         method: 'POST',
         body: formData,
       });
@@ -481,7 +485,7 @@ const AdminPanel = () => {
         editImageFiles.forEach(file => formData.append('productImages', file));
       }
 
-      const res = await fetch(`http://localhost:5000/api/admin/products/${editingProduct.id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/products/${editingProduct.id}`, {
         method: 'PUT',
         body: formData,
       });
@@ -505,7 +509,7 @@ const AdminPanel = () => {
     if (!window.confirm('Are you sure you want to delete this product?')) return;
     setDeletingProductId(id);
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/products/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${API_BASE_URL}/api/admin/products/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         setProducts(prev => prev.filter(p => p.id !== id));
@@ -520,7 +524,7 @@ const AdminPanel = () => {
     setSettingsError('');
     setSettingsSuccess('');
     try {
-      const res = await fetch('http://localhost:5000/api/admin/settings', {
+      const res = await fetch(`${API_BASE_URL}/api/admin/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: { deliveryFee } })
@@ -538,6 +542,18 @@ const AdminPanel = () => {
   };
 
   const totalRevenue = orders.filter(o => o.status !== 'Order Received').reduce((s, o) => s + Number(o.totalAmount), 0);
+
+  // Status & Customer Breakdown Stats
+  const orderReceivedCount = orders.filter(o => o.status === 'Order Received').length;
+  const paymentVerifiedCount = orders.filter(o => o.status === 'Payment Verified').length;
+  const packingCount = orders.filter(o => o.status === 'Packing').length;
+  const shippedCount = orders.filter(o => o.status === 'Shipped').length;
+  const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
+  const uniqueCustomersCount = new Set(orders.map(o => (o.mobile || o.customerName || '').trim().toLowerCase()).filter(Boolean)).size;
+
+  const filteredOrders = orderStatusFilter === 'ALL'
+    ? orders
+    : orders.filter(o => o.status === orderStatusFilter);
 
   // ─── LOGIN SCREEN ────────────────────────────────────────────────────────────
   if (!isAuthenticated) {
@@ -641,37 +657,52 @@ const AdminPanel = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
         <div 
           onClick={() => setShowOrderStats(true)}
           className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-festival-gold/30"
-          title="Click to view order breakdown"
+          title="Click to view order status breakdown"
         >
           <span className="text-3xl">📦</span>
           <div>
-            <p className="text-gray-500 text-xs group-hover:text-gray-300">Total Orders</p>
+            <p className="text-gray-400 text-xs group-hover:text-gray-300 font-medium">Total Orders</p>
             <p className="text-white font-bold text-2xl">{orders.length}</p>
           </div>
         </div>
+
+        <div 
+          onClick={() => { setActiveTab('orders'); setOrderStatusFilter('Shipped'); }}
+          className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-purple-500/30"
+          title="Click to view shipped orders"
+        >
+          <span className="text-3xl">🚚</span>
+          <div>
+            <p className="text-gray-400 text-xs font-medium">Shipped</p>
+            <p className="text-purple-400 font-bold text-2xl">{shippedCount}</p>
+          </div>
+        </div>
+
+        <div className="glass-card p-5 flex items-center gap-4">
+          <span className="text-3xl">👥</span>
+          <div>
+            <p className="text-gray-400 text-xs font-medium">Total Customers</p>
+            <p className="text-festival-gold font-bold text-2xl">{uniqueCustomersCount}</p>
+          </div>
+        </div>
+
         <div className="glass-card p-5 flex items-center gap-4">
           <span className="text-3xl">🎆</span>
           <div>
-            <p className="text-gray-500 text-xs">Live Products</p>
+            <p className="text-gray-400 text-xs font-medium">Live Products</p>
             <p className="text-white font-bold text-2xl">{products.length}</p>
           </div>
         </div>
-        <div className="glass-card p-5 flex items-center gap-4">
-          <span className="text-3xl">🏷️</span>
-          <div>
-            <p className="text-gray-500 text-xs">Categories</p>
-            <p className="text-white font-bold text-2xl">{categories.length}</p>
-          </div>
-        </div>
+
         <div className="glass-card p-5 flex items-center gap-4">
           <span className="text-3xl">💰</span>
           <div>
-            <p className="text-gray-500 text-xs">Verified Revenue</p>
-            <p className="text-white font-bold text-2xl">₹{totalRevenue.toLocaleString()}</p>
+            <p className="text-gray-400 text-xs font-medium">Verified Revenue</p>
+            <p className="text-emerald-400 font-bold text-2xl">₹{totalRevenue.toLocaleString()}</p>
           </div>
         </div>
       </div>
@@ -737,19 +768,127 @@ const AdminPanel = () => {
       {/* Tab 1: Orders List */}
       {activeTab === 'orders' && (
         <div className="space-y-4">
+          {/* Order Status & Customer Summary Filter Bar */}
+          <div className="glass-card p-4 border-white/10 mb-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Filter size={18} className="text-festival-gold" />
+                <h3 className="text-white font-bold text-sm">Filter Orders by Status</h3>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-400 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
+                <Users size={14} className="text-festival-gold" />
+                <span>Total Customers: <strong className="text-white font-bold">{uniqueCustomersCount}</strong></span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                id="filter-all-orders"
+                onClick={() => setOrderStatusFilter('ALL')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                  orderStatusFilter === 'ALL'
+                    ? 'bg-festival-gold text-black shadow-md font-bold'
+                    : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10'
+                }`}
+              >
+                <span>All Orders</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${orderStatusFilter === 'ALL' ? 'bg-black/20 text-black' : 'bg-white/10 text-white'}`}>
+                  {orders.length}
+                </span>
+              </button>
+
+              <button
+                id="filter-order-received"
+                onClick={() => setOrderStatusFilter('Order Received')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                  orderStatusFilter === 'Order Received'
+                    ? 'bg-blue-500 text-white shadow-md font-bold'
+                    : 'bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border border-blue-500/30'
+                }`}
+              >
+                <span>📥 Order Received</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-500/30 text-white">
+                  {orderReceivedCount}
+                </span>
+              </button>
+
+              <button
+                id="filter-payment-verified"
+                onClick={() => setOrderStatusFilter('Payment Verified')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                  orderStatusFilter === 'Payment Verified'
+                    ? 'bg-green-500 text-black shadow-md font-bold'
+                    : 'bg-green-500/10 text-green-300 hover:bg-green-500/20 border border-green-500/30'
+                }`}
+              >
+                <span>💳 Payment Verified</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-green-500/30 text-white">
+                  {paymentVerifiedCount}
+                </span>
+              </button>
+
+              <button
+                id="filter-packing"
+                onClick={() => setOrderStatusFilter('Packing')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                  orderStatusFilter === 'Packing'
+                    ? 'bg-yellow-500 text-black shadow-md font-bold'
+                    : 'bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20 border border-yellow-500/30'
+                }`}
+              >
+                <span>📦 Packing</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-yellow-500/30 text-white">
+                  {packingCount}
+                </span>
+              </button>
+
+              <button
+                id="filter-shipped"
+                onClick={() => setOrderStatusFilter('Shipped')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                  orderStatusFilter === 'Shipped'
+                    ? 'bg-purple-500 text-white shadow-md font-bold'
+                    : 'bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 border border-purple-500/30'
+                }`}
+              >
+                <span>🚚 Shipped</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-500/30 text-white">
+                  {shippedCount}
+                </span>
+              </button>
+
+              <button
+                id="filter-delivered"
+                onClick={() => setOrderStatusFilter('Delivered')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
+                  orderStatusFilter === 'Delivered'
+                    ? 'bg-amber-500 text-black shadow-md font-bold'
+                    : 'bg-festival-gold/10 text-festival-gold hover:bg-festival-gold/20 border border-festival-gold/30'
+                }`}
+              >
+                <span>✅ Delivered</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/30 text-white">
+                  {deliveredCount}
+                </span>
+              </button>
+            </div>
+          </div>
+
           {ordersLoading ? (
             <div className="text-center py-20">
               <p className="text-3xl mb-2">⏳</p>
               <p className="text-gray-400">Loading customer orders...</p>
             </div>
-          ) : orders.length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <div className="text-center py-20 glass-card">
               <Package size={48} className="mx-auto text-gray-600 mb-4" />
-              <p className="text-gray-400 font-semibold mb-1">No orders placed yet</p>
+              <p className="text-gray-400 font-semibold mb-1">
+                {orderStatusFilter === 'ALL' ? 'No orders placed yet' : `No orders with status "${orderStatusFilter}"`}
+              </p>
               <p className="text-gray-600 text-sm">Customer orders will appear here automatically.</p>
             </div>
           ) : (
-            orders.map((order, i) => (
+            filteredOrders.map((order, i) => (
               <motion.div
                 key={order.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -799,6 +938,14 @@ const AdminPanel = () => {
                           <Images size={14} /> View Proof
                         </a>
                       )}
+                      <button
+                        id={`view-bill-${order.id}`}
+                        onClick={() => setSelectedBillOrder(order)}
+                        className="text-amber-400 hover:text-amber-300 text-xs font-semibold px-3 py-1.5 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                        title="View Bill / Invoice PDF"
+                      >
+                        <FileText size={14} /> View Bill
+                      </button>
                       <button
                         onClick={() => printAddressSlip(order)}
                         className="text-green-400 hover:text-green-300 text-xs font-semibold px-3 py-1.5 border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
@@ -1548,6 +1695,13 @@ const AdminPanel = () => {
           </div>
         </motion.div>
       )}
+
+      {/* Bill Preview Modal for Admin */}
+      <BillPreviewModal
+        isOpen={!!selectedBillOrder}
+        onClose={() => setSelectedBillOrder(null)}
+        order={selectedBillOrder}
+      />
 
     </div>
   );

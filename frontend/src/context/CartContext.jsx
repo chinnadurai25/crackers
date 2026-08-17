@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const CartContext = createContext(null);
 
@@ -58,7 +59,7 @@ export const CartProvider = ({ children }) => {
   const [deliveryFee, setDeliveryFee] = useState(0);
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/settings')
+    fetch(`${API_BASE_URL}/api/settings`)
       .then(res => res.json())
       .then(data => {
         if (data.success && data.settings && data.settings.deliveryFee !== undefined) {

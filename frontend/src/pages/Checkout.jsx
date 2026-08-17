@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { generateBill } from '../utils/generateBill';
 import { FileDown, Upload, Landmark, Copy, CheckCircle2, Smartphone, ShieldCheck } from 'lucide-react';
 import BillPreviewModal from '../components/BillPreviewModal';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-festival-gold transition-colors";
 
@@ -50,7 +51,7 @@ const Checkout = () => {
     formData.append('paymentProof', proofFile);
     
     try {
-      const res = await fetch(`http://localhost:5000/api/orders/${orderId}/payment-proof`, {
+      const res = await fetch(`${API_BASE_URL}/api/orders/${orderId}/payment-proof`, {
         method: 'POST',
         body: formData
       });
@@ -70,7 +71,7 @@ const Checkout = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:5000/api/orders', {
+      const res = await fetch(`${API_BASE_URL}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

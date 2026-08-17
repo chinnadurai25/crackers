@@ -4,6 +4,7 @@ import { Sparkles, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import DiwaliBanner from '../components/DiwaliBanner';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const CATEGORY_ICONS = {
   'Combo Packs': '📦',
@@ -27,8 +28,8 @@ const HomeShowcase = () => {
   useEffect(() => {
     // Fetch categories and products in parallel
     Promise.all([
-      fetch('http://localhost:5000/api/categories').then(res => res.json()),
-      fetch('http://localhost:5000/api/products').then(res => res.json())
+      fetch(`${API_BASE_URL}/api/categories`).then(res => res.json()),
+      fetch(`${API_BASE_URL}/api/products`).then(res => res.json())
     ])
     .then(([categoriesData, productsData]) => {
       const cats = Array.isArray(categoriesData) ? categoriesData.filter(c => c !== 'All') : [];

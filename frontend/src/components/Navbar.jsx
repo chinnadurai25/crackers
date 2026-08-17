@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShoppingCart, Menu, Zap, ChevronDown, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const Navbar = ({ onCartClick }) => {
   const { cartCount } = useCart();
@@ -12,7 +13,7 @@ const Navbar = ({ onCartClick }) => {
   const location = useLocation();
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/categories')
+    fetch(`${API_BASE_URL}/api/categories`)
       .then(res => res.json())
       .then(data => setCategories(Array.isArray(data) ? data : ['All']))
       .catch(() => { });

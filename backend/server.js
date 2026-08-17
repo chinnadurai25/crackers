@@ -674,6 +674,17 @@ const initDbHandler = async (req, res) => {
 app.get('/api/init-db', initDbHandler);
 app.post('/api/init-db', initDbHandler);
 
+// ─── Serve React Frontend ─────────────────────────────────────────────────────
+// Serve static files from the React dist folder (for production on GoDaddy)
+const distPath = path.join(__dirname, 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  // For any non-API route, return React's index.html (React Router handles it)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
+
 // ─── Start Server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

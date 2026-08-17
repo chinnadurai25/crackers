@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, X, Sparkles } from 'lucide-react';
 import ProductCard from '../components/ProductCard';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const CATEGORY_ICONS = {
   'All': '✨',
@@ -38,7 +39,7 @@ const ProductCatalog = () => {
 
   // Fetch categories once
   useEffect(() => {
-    fetch('http://localhost:5000/api/categories')
+    fetch(`${API_BASE_URL}/api/categories`)
       .then(res => res.json())
       .then(data => setCategories(Array.isArray(data) ? data : ['All']))
       .catch(() => {});
@@ -54,7 +55,7 @@ const ProductCatalog = () => {
     if (searchQuery.trim()) params.set('search', searchQuery.trim());
 
     const queryString = params.toString();
-    const url = `http://localhost:5000/api/products${queryString ? `?${queryString}` : ''}`;
+    const url = `${API_BASE_URL}/api/products${queryString ? `?${queryString}` : ''}`;
 
     fetch(url)
       .then(res => res.json())

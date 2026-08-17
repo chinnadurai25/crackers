@@ -4,6 +4,7 @@ import { Package, Truck, CheckCircle, CreditCard, Search, FileDown } from 'lucid
 import { useSearchParams } from 'react-router-dom';
 import { generateBill } from '../utils/generateBill';
 import BillPreviewModal from '../components/BillPreviewModal';
+import { API_BASE_URL } from '../utils/apiConfig';
 
 const STATUS_STEPS = [
   { key: 'Order Received', icon: Package, label: 'Order Received' },
@@ -28,7 +29,7 @@ const OrderTracking = () => {
     setError('');
     setOrder(null);
     try {
-      const res = await fetch(`http://localhost:5000/api/orders/${id.trim()}`);
+      const res = await fetch(`${API_BASE_URL}/api/orders/${id.trim()}`);
       if (res.ok) {
         const data = await res.json();
         setOrder(data);
