@@ -57,6 +57,7 @@ const AdminPanel = () => {
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
   const [selectedBillOrder, setSelectedBillOrder] = useState(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
+  const [shippingModal, setShippingModal] = useState({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' });
 
   // Products state
   const [products, setProducts] = useState([]);
@@ -178,7 +179,7 @@ const AdminPanel = () => {
       if (data.success && data.settings) {
         setDeliveryFee(data.settings.deliveryFee || '0');
       }
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -191,19 +192,21 @@ const AdminPanel = () => {
   }, [isAuthenticated]);
 
   // Update Status
-  const updateStatus = async (orderId, status) => {
+  const updateStatus = async (orderId, status, transportDetails = null) => {
     setUpdatingStatus(orderId);
     try {
+      const body = { status };
+      if (transportDetails) body.transportDetails = transportDetails;
       const res = await fetch(`${API_BASE_URL}/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       setOrders(prev => prev.map(o => {
         if (o.id === orderId) {
           const updatedHistory = data.statusHistory || o.statusHistory || [];
-          return { ...o, status, statusHistory: updatedHistory };
+          return { ...o, status, statusHistory: updatedHistory, transportDetails: data.transportDetails || o.transportDetails };
         }
         return o;
       }));
@@ -214,7 +217,7 @@ const AdminPanel = () => {
           statusHistory: data.statusHistory || prev.statusHistory
         }));
       }
-    } catch {}
+    } catch { }
     setUpdatingStatus(null);
   };
 
@@ -226,14 +229,14 @@ const AdminPanel = () => {
       if (res.ok) {
         setOrders(prev => prev.filter(o => o.id !== orderId));
       }
-    } catch {}
+    } catch { }
     setUpdatingStatus(null);
   };
 
   const printAddressSlip = (order) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
-    
+
     const itemsHtml = (order.items || []).map(item => `
       <tr>
         <td style="padding: 8px; border-bottom: 1px solid #eee;">${item.name}</td>
@@ -346,7 +349,7 @@ const AdminPanel = () => {
         fetchCategories();
         fetchProducts();
       }
-    } catch {}
+    } catch { }
     setCategoryActionLoading(false);
   };
 
@@ -359,7 +362,7 @@ const AdminPanel = () => {
         fetchCategories();
         fetchProducts();
       }
-    } catch {}
+    } catch { }
     setCategoryActionLoading(false);
   };
 
@@ -514,7 +517,7 @@ const AdminPanel = () => {
       if (data.success) {
         setProducts(prev => prev.filter(p => p.id !== id));
       }
-    } catch {}
+    } catch { }
     setDeletingProductId(null);
   };
 
@@ -658,7 +661,7 @@ const AdminPanel = () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-        <div 
+        <div
           onClick={() => setShowOrderStats(true)}
           className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-festival-gold/30"
           title="Click to view order status breakdown"
@@ -670,7 +673,7 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        <div 
+        <div
           onClick={() => { setActiveTab('orders'); setOrderStatusFilter('Shipped'); }}
           className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:bg-white/10 transition-colors border border-transparent hover:border-purple-500/30"
           title="Click to view shipped orders"
@@ -711,55 +714,50 @@ const AdminPanel = () => {
       <div className="flex gap-3 border-b border-white/10 mb-8 pb-3 overflow-x-auto hide-scrollbar">
         <button
           onClick={() => setActiveTab('orders')}
-          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'orders'
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'orders'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
-          }`}
+            }`}
         >
           <Package size={16} /> Customer Orders ({orders.length})
         </button>
 
         <button
           onClick={() => setActiveTab('products')}
-          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'products'
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'products'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
-          }`}
+            }`}
         >
           <ShoppingBag size={16} /> All Products ({products.length})
         </button>
 
         <button
           onClick={() => setActiveTab('categories')}
-          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'categories'
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'categories'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
-          }`}
+            }`}
         >
           <Layers size={16} /> Categories ({categories.length})
         </button>
 
         <button
           onClick={() => setActiveTab('add-product')}
-          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'add-product'
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'add-product'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
-          }`}
+            }`}
         >
           <Plus size={16} /> Add Product
         </button>
 
         <button
           onClick={() => setActiveTab('settings')}
-          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            activeTab === 'settings'
+          className={`flex shrink-0 items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === 'settings'
               ? 'bg-festival-gold text-black shadow-[0_0_15px_rgba(255,215,0,0.4)]'
               : 'text-gray-400 hover:text-white hover:bg-white/5'
-          }`}
+            }`}
         >
           <Settings size={16} /> Settings
         </button>
@@ -785,11 +783,10 @@ const AdminPanel = () => {
               <button
                 id="filter-all-orders"
                 onClick={() => setOrderStatusFilter('ALL')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  orderStatusFilter === 'ALL'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${orderStatusFilter === 'ALL'
                     ? 'bg-festival-gold text-black shadow-md font-bold'
                     : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10'
-                }`}
+                  }`}
               >
                 <span>All Orders</span>
                 <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${orderStatusFilter === 'ALL' ? 'bg-black/20 text-black' : 'bg-white/10 text-white'}`}>
@@ -800,11 +797,10 @@ const AdminPanel = () => {
               <button
                 id="filter-order-received"
                 onClick={() => setOrderStatusFilter('Order Received')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  orderStatusFilter === 'Order Received'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${orderStatusFilter === 'Order Received'
                     ? 'bg-blue-500 text-white shadow-md font-bold'
                     : 'bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 border border-blue-500/30'
-                }`}
+                  }`}
               >
                 <span>📥 Order Received</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-500/30 text-white">
@@ -815,11 +811,10 @@ const AdminPanel = () => {
               <button
                 id="filter-payment-verified"
                 onClick={() => setOrderStatusFilter('Payment Verified')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  orderStatusFilter === 'Payment Verified'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${orderStatusFilter === 'Payment Verified'
                     ? 'bg-green-500 text-black shadow-md font-bold'
                     : 'bg-green-500/10 text-green-300 hover:bg-green-500/20 border border-green-500/30'
-                }`}
+                  }`}
               >
                 <span>💳 Payment Verified</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-green-500/30 text-white">
@@ -830,11 +825,10 @@ const AdminPanel = () => {
               <button
                 id="filter-packing"
                 onClick={() => setOrderStatusFilter('Packing')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  orderStatusFilter === 'Packing'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${orderStatusFilter === 'Packing'
                     ? 'bg-yellow-500 text-black shadow-md font-bold'
                     : 'bg-yellow-500/10 text-yellow-300 hover:bg-yellow-500/20 border border-yellow-500/30'
-                }`}
+                  }`}
               >
                 <span>📦 Packing</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-yellow-500/30 text-white">
@@ -845,11 +839,10 @@ const AdminPanel = () => {
               <button
                 id="filter-shipped"
                 onClick={() => setOrderStatusFilter('Shipped')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  orderStatusFilter === 'Shipped'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${orderStatusFilter === 'Shipped'
                     ? 'bg-purple-500 text-white shadow-md font-bold'
                     : 'bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 border border-purple-500/30'
-                }`}
+                  }`}
               >
                 <span>🚚 Shipped</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-500/30 text-white">
@@ -860,11 +853,10 @@ const AdminPanel = () => {
               <button
                 id="filter-delivered"
                 onClick={() => setOrderStatusFilter('Delivered')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                  orderStatusFilter === 'Delivered'
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${orderStatusFilter === 'Delivered'
                     ? 'bg-amber-500 text-black shadow-md font-bold'
                     : 'bg-festival-gold/10 text-festival-gold hover:bg-festival-gold/20 border border-festival-gold/30'
-                }`}
+                  }`}
               >
                 <span>✅ Delivered</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/30 text-white">
@@ -910,6 +902,15 @@ const AdminPanel = () => {
                     </p>
                     <p className="text-gray-500 text-xs mt-1">{order.address}</p>
                     {order.landmark && <p className="text-gray-500 text-xs mt-0.5">Landmark: {order.landmark}</p>}
+
+                    {order.transportDetails && (
+                      <div className="mt-3 bg-purple-500/10 border border-purple-500/20 p-2.5 rounded-lg">
+                        <p className="text-purple-300 text-xs font-bold mb-1 uppercase tracking-wider">Shipping Details</p>
+                        <p className="text-gray-300 text-xs"><span className="text-gray-500">Transport:</span> {order.transportDetails.transportName}</p>
+                        <p className="text-gray-300 text-xs"><span className="text-gray-500">LLR No:</span> {order.transportDetails.llrNo}</p>
+                        <p className="text-gray-300 text-xs"><span className="text-gray-500">Contact:</span> {order.transportDetails.contactNumber}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-[150px]">
@@ -964,7 +965,14 @@ const AdminPanel = () => {
                       <select
                         id={`status-${order.id}`}
                         value={order.status}
-                        onChange={(e) => updateStatus(order.id, e.target.value)}
+                        onChange={(e) => {
+                          const newStatus = e.target.value;
+                          if (newStatus === 'Shipped') {
+                            setShippingModal({ open: true, orderId: order.id, transportName: '', llrNo: '', contactNumber: '' });
+                          } else {
+                            updateStatus(order.id, newStatus);
+                          }
+                        }}
                         disabled={updatingStatus === order.id}
                         className="bg-white/5 border border-white/15 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-festival-gold cursor-pointer"
                       >
@@ -1537,7 +1545,7 @@ const AdminPanel = () => {
               exit={{ scale: 0.9, y: 20 }}
               className="glass-card p-6 w-full max-w-sm relative"
             >
-              <button 
+              <button
                 onClick={() => setShowOrderStats(false)}
                 className="absolute top-4 right-4 text-gray-400 hover:text-white"
               >
@@ -1547,7 +1555,7 @@ const AdminPanel = () => {
                 <Package size={24} className="text-festival-gold" />
                 Order Breakdown
               </h3>
-              
+
               <div className="space-y-3">
                 {STATUSES.map(status => {
                   const count = orders.filter(o => o.status === status).length;
@@ -1561,7 +1569,7 @@ const AdminPanel = () => {
                   );
                 })}
               </div>
-              
+
               <div className="mt-6 pt-4 border-t border-white/10 flex justify-between items-center">
                 <span className="text-gray-400 text-sm">Total Orders</span>
                 <span className="text-festival-gold font-bold text-xl">{orders.length}</span>
@@ -1608,13 +1616,12 @@ const AdminPanel = () => {
 
                   return (
                     <div key={statusName} className="flex items-start gap-4 relative z-10 pl-2">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border transition-all ${
-                        isCurrent
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shrink-0 border transition-all ${isCurrent
                           ? 'bg-festival-gold text-black border-festival-gold shadow-[0_0_12px_rgba(255,215,0,0.5)] scale-110'
                           : isCompleted
-                          ? 'bg-green-500/20 text-green-400 border-green-500/40'
-                          : 'bg-white/5 text-gray-500 border-white/10'
-                      }`}>
+                            ? 'bg-green-500/20 text-green-400 border-green-500/40'
+                            : 'bg-white/5 text-gray-500 border-white/10'
+                        }`}>
                         {isCompleted ? <CheckCircle2 size={16} /> : idx + 1}
                       </div>
                       <div className="flex-1 bg-white/5 border border-white/10 rounded-xl p-3">
@@ -1652,6 +1659,79 @@ const AdminPanel = () => {
         )}
       </AnimatePresence>
 
+      {/* Shipping Details Modal */}
+      <AnimatePresence>
+        {shippingModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 md:p-8 w-full max-w-md bg-[#0d0d14] border-white/20 shadow-2xl relative"
+            >
+              <h3 className="text-xl font-bold text-white mb-4">Shipping Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">Transport Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    value={shippingModal.transportName}
+                    onChange={(e) => setShippingModal({ ...shippingModal, transportName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">LLR No *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    value={shippingModal.llrNo}
+                    onChange={(e) => setShippingModal({ ...shippingModal, llrNo: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">Contact Number *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    value={shippingModal.contactNumber}
+                    onChange={(e) => setShippingModal({ ...shippingModal, contactNumber: e.target.value })}
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShippingModal({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' })}
+                    className="flex-1 py-2 border border-white/20 rounded-xl text-gray-300 hover:text-white transition-all text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!shippingModal.transportName || !shippingModal.llrNo || !shippingModal.contactNumber) {
+                        alert('Please fill all transport details');
+                        return;
+                      }
+                      updateStatus(shippingModal.orderId, 'Shipped', {
+                        transportName: shippingModal.transportName,
+                        llrNo: shippingModal.llrNo,
+                        contactNumber: shippingModal.contactNumber
+                      });
+                      setShippingModal({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' });
+                    }}
+                    className="flex-1 btn-primary py-2 text-sm"
+                  >
+                    Save & Update
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Tab 5: Settings */}
       {activeTab === 'settings' && (
         <motion.div
@@ -1663,7 +1743,7 @@ const AdminPanel = () => {
             <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
               <Settings size={20} className="text-festival-gold" /> Global Settings
             </h3>
-            
+
             {settingsSuccess && <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-sm">{settingsSuccess}</div>}
             {settingsError && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm">{settingsError}</div>}
 

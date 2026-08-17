@@ -135,6 +135,13 @@ const ensureTablesExist = async () => {
     } catch (e) {
       // Column already exists
     }
+
+    // Ensure transportDetails column exists in orders table
+    try {
+      await pool.query('ALTER TABLE orders ADD COLUMN transportDetails JSON');
+    } catch (e) {
+      // Column already exists
+    }
   } catch (err) {
     console.error('Table check error:', err.message);
   }
@@ -376,6 +383,15 @@ app.get('/api/orders/:id', async (req, res) => {
       parsedItems = order.items;
     }
     order.items = parsedItems;
+    
+    let parsedTransport = null;
+    if (typeof order.transportDetails === 'string') {
+      try { parsedTransport = JSON.parse(order.transportDetails); } catch(e) {}
+    } else if (order.transportDetails) {
+      parsedTransport = order.transportDetails;
+    }
+    order.transportDetails = parsedTransport;
+    
     order.statusHistory = parseOrderStatusHistory(order);
     res.json(order);
   } catch (error) {
@@ -606,10 +622,19 @@ app.get('/api/admin/orders', async (req, res) => {
       } else if (o.items) {
         parsedItems = o.items;
       }
+      
+      let parsedTransport = null;
+      if (typeof o.transportDetails === 'string') {
+        try { parsedTransport = JSON.parse(o.transportDetails); } catch(e) {}
+      } else if (o.transportDetails) {
+        parsedTransport = o.transportDetails;
+      }
+
       return { 
         ...o, 
         items: parsedItems,
-        statusHistory: parseOrderStatusHistory(o)
+        statusHistory: parseOrderStatusHistory(o),
+        transportDetails: parsedTransport
       };
     });
     res.json(orders);
@@ -622,7 +647,7 @@ app.get('/api/admin/orders', async (req, res) => {
 app.patch('/api/admin/orders/:id/status', async (req, res) => {
   try {
     await ensureTablesExist();
-    const { status } = req.body;
+    const { status, transportDetails } = req.body;
     const validStatuses = ['Order Received', 'Payment Verified', 'Packing', 'Shipped', 'Delivered'];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
@@ -643,8 +668,13 @@ app.patch('/api/admin/orders/:id/status', async (req, res) => {
       history.push({ status, date: nowIso });
     }
 
-    await pool.query('UPDATE orders SET status = ?, statusHistory = ? WHERE id = ?', [status, JSON.stringify(history), req.params.id]);
-    res.json({ success: true, message: 'Order status updated', statusHistory: history });
+    if (transportDetails) {
+      await pool.query('UPDATE orders SET status = ?, statusHistory = ?, transportDetails = ? WHERE id = ?', [status, JSON.stringify(history), JSON.stringify(transportDetails), req.params.id]);
+    } else {
+      await pool.query('UPDATE orders SET status = ?, statusHistory = ? WHERE id = ?', [status, JSON.stringify(history), req.params.id]);
+    }
+
+    res.json({ success: true, message: 'Order status updated', statusHistory: history, transportDetails });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
