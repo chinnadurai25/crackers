@@ -128,6 +128,25 @@ const OrderTracking = () => {
                 <p className="text-gray-500 text-xs">Delivery Address</p>
                 <p className="text-white font-medium">{order.address}, {order.city} - {order.pincode}</p>
               </div>
+              {order.transportDetails && (
+                <div className="col-span-2 mt-2 bg-purple-500/10 border border-purple-500/20 p-4 rounded-xl">
+                  <p className="text-purple-300 font-bold mb-3 flex items-center gap-2"><Truck size={16} /> Shipping Details</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <p className="text-purple-300/60 text-xs uppercase tracking-wider mb-1">Transport Name</p>
+                      <p className="text-white font-medium">{order.transportDetails.transportName}</p>
+                    </div>
+                    <div>
+                      <p className="text-purple-300/60 text-xs uppercase tracking-wider mb-1">LLR No</p>
+                      <p className="text-white font-medium font-mono bg-black/20 px-2 py-0.5 rounded inline-block">{order.transportDetails.llrNo}</p>
+                    </div>
+                    <div>
+                      <p className="text-purple-300/60 text-xs uppercase tracking-wider mb-1">Contact Number</p>
+                      <p className="text-white font-medium">{order.transportDetails.contactNumber}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

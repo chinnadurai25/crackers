@@ -53,6 +53,7 @@ const AdminPanel = () => {
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [showOrderStats, setShowOrderStats] = useState(false);
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
+  const [shippingModal, setShippingModal] = useState({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' });
 
   // Products state
   const [products, setProducts] = useState([]);
@@ -187,19 +188,21 @@ const AdminPanel = () => {
   }, [isAuthenticated]);
 
   // Update Status
-  const updateStatus = async (orderId, status) => {
+  const updateStatus = async (orderId, status, transportDetails = null) => {
     setUpdatingStatus(orderId);
     try {
+      const body = { status };
+      if (transportDetails) body.transportDetails = transportDetails;
       const res = await fetch(`http://localhost:5000/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       setOrders(prev => prev.map(o => {
         if (o.id === orderId) {
           const updatedHistory = data.statusHistory || o.statusHistory || [];
-          return { ...o, status, statusHistory: updatedHistory };
+          return { ...o, status, statusHistory: updatedHistory, transportDetails: data.transportDetails || o.transportDetails };
         }
         return o;
       }));
@@ -771,6 +774,15 @@ const AdminPanel = () => {
                     </p>
                     <p className="text-gray-500 text-xs mt-1">{order.address}</p>
                     {order.landmark && <p className="text-gray-500 text-xs mt-0.5">Landmark: {order.landmark}</p>}
+                    
+                    {order.transportDetails && (
+                      <div className="mt-3 bg-purple-500/10 border border-purple-500/20 p-2.5 rounded-lg">
+                        <p className="text-purple-300 text-xs font-bold mb-1 uppercase tracking-wider">Shipping Details</p>
+                        <p className="text-gray-300 text-xs"><span className="text-gray-500">Transport:</span> {order.transportDetails.transportName}</p>
+                        <p className="text-gray-300 text-xs"><span className="text-gray-500">LLR No:</span> {order.transportDetails.llrNo}</p>
+                        <p className="text-gray-300 text-xs"><span className="text-gray-500">Contact:</span> {order.transportDetails.contactNumber}</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-1 min-w-[150px]">
@@ -817,7 +829,14 @@ const AdminPanel = () => {
                       <select
                         id={`status-${order.id}`}
                         value={order.status}
-                        onChange={(e) => updateStatus(order.id, e.target.value)}
+                        onChange={(e) => {
+                          const newStatus = e.target.value;
+                          if (newStatus === 'Shipped') {
+                            setShippingModal({ open: true, orderId: order.id, transportName: '', llrNo: '', contactNumber: '' });
+                          } else {
+                            updateStatus(order.id, newStatus);
+                          }
+                        }}
                         disabled={updatingStatus === order.id}
                         className="bg-white/5 border border-white/15 rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:outline-none focus:border-festival-gold cursor-pointer"
                       >
@@ -1499,6 +1518,79 @@ const AdminPanel = () => {
                 >
                   Close Timeline
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Shipping Details Modal */}
+      <AnimatePresence>
+        {shippingModal.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="glass-card p-6 md:p-8 w-full max-w-md bg-[#0d0d14] border-white/20 shadow-2xl relative"
+            >
+              <h3 className="text-xl font-bold text-white mb-4">Shipping Details</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">Transport Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    value={shippingModal.transportName}
+                    onChange={(e) => setShippingModal({ ...shippingModal, transportName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">LLR No *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    value={shippingModal.llrNo}
+                    onChange={(e) => setShippingModal({ ...shippingModal, llrNo: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-300 text-sm font-medium mb-1.5 block">Contact Number *</label>
+                  <input
+                    type="text"
+                    required
+                    className={inputClass}
+                    value={shippingModal.contactNumber}
+                    onChange={(e) => setShippingModal({ ...shippingModal, contactNumber: e.target.value })}
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => setShippingModal({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' })}
+                    className="flex-1 py-2 border border-white/20 rounded-xl text-gray-300 hover:text-white transition-all text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!shippingModal.transportName || !shippingModal.llrNo || !shippingModal.contactNumber) {
+                        alert('Please fill all transport details');
+                        return;
+                      }
+                      updateStatus(shippingModal.orderId, 'Shipped', {
+                        transportName: shippingModal.transportName,
+                        llrNo: shippingModal.llrNo,
+                        contactNumber: shippingModal.contactNumber
+                      });
+                      setShippingModal({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' });
+                    }}
+                    className="flex-1 btn-primary py-2 text-sm"
+                  >
+                    Save & Update
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>
