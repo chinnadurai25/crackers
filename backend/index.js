@@ -15,7 +15,11 @@ app.use(express.json());
 // Setup uploads directory
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
+  try {
+    fs.mkdirSync(uploadsDir);
+  } catch (err) {
+    console.warn("Could not create uploads directory:", err.message);
+  }
 }
 
 // Serve uploaded files
@@ -717,8 +721,8 @@ if (fs.existsSync(distPath)) {
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 CrackerKing server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`🚀 CrackerKing server running on port/socket ${PORT}`);
 });
 
 process.on('uncaughtException', err => console.error('Uncaught Exception:', err));
