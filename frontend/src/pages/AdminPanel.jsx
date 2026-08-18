@@ -629,11 +629,6 @@ const AdminPanel = () => {
             </button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-white/10 text-center">
-            <p className="text-gray-500 text-xs">
-              Default Credentials: <code className="text-festival-gold">admin@crackerking.com</code> / <code className="text-festival-gold">admin123</code>
-            </p>
-          </div>
         </motion.div>
       </div>
     );

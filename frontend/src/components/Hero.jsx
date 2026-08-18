@@ -133,15 +133,17 @@ const Hero = () => {
 
         <motion.div variants={itemVariants} className="flex flex-col sm:flex-row items-center justify-center gap-6 relative mt-6">
 
-          <motion.div
-            animate={{ y: [0, -10, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute -top-12 sm:-top-16 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-festival-gold to-festival-orange text-black text-xs font-black px-4 py-2 rounded-full flex items-center gap-1.5 shadow-[0_0_20px_rgba(255,215,0,0.6)] border border-white/40 whitespace-nowrap z-20"
-          >
-            <Gift size={16} className="animate-pulse text-red-700" />
-            MEGA DIWALI SALE - 70% OFF!
-            <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-festival-orange rotate-45 z-[-1]"></div>
-          </motion.div>
+          <div className="absolute -top-12 sm:-top-16 left-1/2 transform -translate-x-1/2 z-20">
+            <motion.div
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+              className="bg-gradient-to-r from-festival-gold to-festival-orange text-black text-xs font-black px-4 py-2 rounded-full flex items-center gap-1.5 shadow-[0_0_20px_rgba(255,215,0,0.6)] border border-white/40 whitespace-nowrap"
+            >
+              <Gift size={16} className="animate-pulse text-red-700" />
+              MEGA DIWALI SALE - 70% OFF!
+              <div className="absolute -bottom-1.5 left-1/2 transform -translate-x-1/2 w-3 h-3 bg-festival-orange rotate-45 z-[-1]"></div>
+            </motion.div>
+          </div>
 
           <Link to="/products" className="w-full sm:w-auto relative z-10">
             <motion.button

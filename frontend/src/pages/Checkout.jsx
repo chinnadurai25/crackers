@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { generateBill } from '../utils/generateBill';
 import { FileDown, Upload, Landmark, Copy, CheckCircle2, Smartphone, ShieldCheck } from 'lucide-react';
@@ -9,6 +10,7 @@ import { API_BASE_URL } from '../utils/apiConfig';
 const inputClass = "w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-festival-gold transition-colors";
 
 const Checkout = () => {
+  const navigate = useNavigate();
   const { cartItems, cartTotal, deliveryFee, clearCart } = useCart();
   const [step, setStep] = useState(1);
   const [orderId, setOrderId] = useState(null);
@@ -17,6 +19,7 @@ const Checkout = () => {
   const [error, setError] = useState('');
   const [showBillModal, setShowBillModal] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showOrderAlert, setShowOrderAlert] = useState(false);
   
   const [proofFile, setProofFile] = useState(null);
   const [uploadingProof, setUploadingProof] = useState(false);
@@ -96,6 +99,7 @@ const Checkout = () => {
         });
         clearCart();
         setStep(4);
+        setShowOrderAlert(true);
       } else {
         setError(data.error || 'Something went wrong. Please try again.');
       }
@@ -164,7 +168,8 @@ const Checkout = () => {
                 <input id="checkout-whatsapp" type="tel" className={inputClass} placeholder="Same as mobile or different" value={form.whatsapp} onChange={update('whatsapp')} />
               </div>
             </div>
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-between mt-4">
+              <button onClick={() => navigate(-1)} className="px-5 py-3 text-gray-400 hover:text-white transition-colors">← Back</button>
               <button
                 id="checkout-step1-next"
                 onClick={() => {
@@ -316,12 +321,14 @@ const Checkout = () => {
                 <FileDown size={18} />
                 View Bill
               </button>
-              <a href={`/tracking?id=${orderId}`} className="px-6 py-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full text-white transition-all flex items-center justify-center">
-                Track Order
-              </a>
             </div>
             <div className="flex justify-center">
-              <a href="/" className="px-6 py-3 border border-white/20 rounded-full text-gray-300 hover:text-white hover:border-white/50 transition-all">Continue Shopping</a>
+              <button 
+                onClick={() => navigate('/', { replace: true })} 
+                className="px-6 py-3 border border-white/20 rounded-full text-gray-300 hover:text-white hover:border-white/50 transition-all"
+              >
+                Continue Shopping
+              </button>
             </div>
           </motion.div>
         )}
@@ -453,6 +460,34 @@ const Checkout = () => {
                 </form>
               )}
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Order ID Popup */}
+      {showOrderAlert && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#11111a] border border-festival-gold/30 p-8 rounded-2xl max-w-sm w-full text-center shadow-2xl"
+          >
+            <div className="w-16 h-16 bg-festival-gold/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-festival-gold/50">
+              <span className="text-3xl">📌</span>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-2">Important</h3>
+            <p className="text-gray-300 mb-6">
+              Please note your <strong className="text-white">Order ID</strong> for future tracking.
+            </p>
+            <div className="bg-black/50 p-4 rounded-xl mb-6 border border-white/10">
+              <p className="text-festival-gold font-mono font-bold text-2xl tracking-wider">{orderId}</p>
+            </div>
+            <button
+              onClick={() => setShowOrderAlert(false)}
+              className="btn-primary w-full"
+            >
+              I have noted it
+            </button>
           </motion.div>
         </div>
       )}
