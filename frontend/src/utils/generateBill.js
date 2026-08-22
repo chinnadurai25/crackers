@@ -56,9 +56,12 @@ export const generateBill = (order, openWindow = true) => {
   const tableData = [];
   if (order.items && Array.isArray(order.items)) {
     order.items.forEach((item, index) => {
+      const packingInfo = item.piecesPerBox 
+        ? ` (${item.boxType || '1 Box'} - ${item.piecesPerBox})`
+        : (item.boxType && item.boxType !== '1 Box' ? ` (${item.boxType})` : '');
       tableData.push([
         index + 1,
-        item.name,
+        `${item.name}${packingInfo}`,
         item.category || '-',
         `${item.quantity} x Rs.${Number(item.price).toFixed(2)}`,
         `Rs. ${(Number(item.price) * Number(item.quantity)).toFixed(2)}`

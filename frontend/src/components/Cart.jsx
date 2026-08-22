@@ -83,7 +83,14 @@ const Cart = ({ isOpen, onClose }) => {
 
                     {/* Details */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-festival-gold text-[10px] font-bold tracking-widest uppercase">{item.category}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="text-festival-gold text-[10px] font-bold tracking-widest uppercase">{item.category}</p>
+                        {(item.boxType || item.piecesPerBox) && (
+                          <span className="text-gray-400 text-[10px] bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
+                            📦 {item.boxType || '1 Box'}{item.piecesPerBox ? ` (${item.piecesPerBox})` : ''}
+                          </span>
+                        )}
+                      </div>
                       <h4 className="font-bold text-white text-sm mb-1 truncate">{item.name}</h4>
                       <p className="text-festival-gold font-bold mb-2">₹{(item.discountedPrice * item.quantity).toLocaleString()}</p>
                       <div className="flex justify-between items-center">

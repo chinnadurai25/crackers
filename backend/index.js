@@ -6,13 +6,15 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
+const cloudinary = require('cloudinary').v2;
 
 dotenv.config();
 
 const app = express();
 app.set('trust proxy', 1);
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Setup uploads directory
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -36,7 +38,52 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ storage: storage, limits: { fileSize: 25 * 1024 * 1024 } });
+
+// Helper to store files permanently in MySQL (Base64) or Cloudinary
+const uploadFileToStorage = async (file, baseUrl, folder = 'crackerking') => {
+  // If Cloudinary keys are provided, upload to Cloudinary:
+  let cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  let apiKey = process.env.CLOUDINARY_API_KEY;
+  let apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (cloudName && apiKey && apiSecret) {
+    try {
+      cloudinary.config({
+        cloud_name: cloudName,
+        api_key: apiKey,
+        api_secret: apiSecret
+      });
+      const result = await cloudinary.uploader.upload(file.path, {
+        folder: folder,
+        resource_type: 'auto'
+      });
+      try { fs.unlinkSync(file.path); } catch (e) {}
+      console.log('✅ File saved to Cloudinary:', result.secure_url);
+      return result.secure_url;
+    } catch (err) {
+      console.error('Cloudinary upload error, using Base64 database storage:', err.message);
+    }
+  }
+
+  // Otherwise, store permanently as Base64 Data URI directly in MySQL database!
+  try {
+    if (fs.existsSync(file.path)) {
+      const fileBuffer = fs.readFileSync(file.path);
+      const mimeType = file.mimetype || 'image/jpeg';
+      const base64Data = fileBuffer.toString('base64');
+      const dataUri = `data:${mimeType};base64,${base64Data}`;
+      // Remove temporary disk file so disk stays clean
+      try { fs.unlinkSync(file.path); } catch (e) {}
+      console.log('✅ Image converted to permanent Base64 Data URI for MySQL storage');
+      return dataUri;
+    }
+  } catch (err) {
+    console.error('Base64 conversion error:', err.message);
+  }
+
+  return `${baseUrl}/uploads/${file.filename}`;
+};
 
 // Create database connection pool
 const rawHost = process.env.DB_HOST || '127.0.0.1';
@@ -70,6 +117,8 @@ const ensureTablesExist = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         category VARCHAR(100) NOT NULL DEFAULT 'Uncategorized',
+        boxType VARCHAR(100) DEFAULT '1 Box',
+        piecesPerBox VARCHAR(100) DEFAULT '',
         description TEXT,
         originalPrice DECIMAL(10, 2) NOT NULL,
         discountedPrice DECIMAL(10, 2) NOT NULL,
@@ -107,13 +156,44 @@ const ensureTablesExist = async () => {
       )
     `);
 
-    await pool.query(`
-      INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('deliveryFee', '0')
-    `);
+    const defaultSettings = [
+      ['deliveryFee', '0'],
+      ['accountName', 'Magical Crackers'],
+      ['accountNumber', '194536383261127'],
+      ['ifscCode', 'TMBL0000194'],
+      ['bankName', 'Tamilnad Mercantile Bank'],
+      ['gpayNumber', '6380037709'],
+      ['whatsappNumber', '6380037709'],
+      ['qrCodeUrl', ''],
+      ['cloudinaryCloudName', ''],
+      ['cloudinaryApiKey', ''],
+      ['cloudinaryApiSecret', '']
+    ];
+
+    for (const [key, val] of defaultSettings) {
+      await pool.query(
+        'INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)',
+        [key, val]
+      );
+    }
 
     // Ensure images column exists in products table
     try {
       await pool.query('ALTER TABLE products ADD COLUMN images JSON');
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Ensure boxType column exists in products table
+    try {
+      await pool.query('ALTER TABLE products ADD COLUMN boxType VARCHAR(100) DEFAULT "1 Box"');
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Ensure piecesPerBox column exists in products table
+    try {
+      await pool.query('ALTER TABLE products ADD COLUMN piecesPerBox VARCHAR(100) DEFAULT ""');
     } catch (e) {
       // Column already exists
     }
@@ -159,6 +239,12 @@ const ensureTablesExist = async () => {
     } catch (e) {
       // Column already exists
     }
+
+    // Ensure columns can store full Base64 images permanently in MySQL (LONGTEXT)
+    try { await pool.query('ALTER TABLE products MODIFY COLUMN imageUrl LONGTEXT'); } catch (e) {}
+    try { await pool.query('ALTER TABLE products MODIFY COLUMN images LONGTEXT'); } catch (e) {}
+    try { await pool.query('ALTER TABLE orders MODIFY COLUMN paymentProofUrl LONGTEXT'); } catch (e) {}
+    try { await pool.query('ALTER TABLE settings MODIFY COLUMN setting_value LONGTEXT'); } catch (e) {}
   } catch (err) {
     console.error('Table check error:', err.message);
   }
@@ -194,6 +280,38 @@ app.put('/api/admin/settings', async (req, res) => {
       );
     }
     res.json({ success: true, message: 'Settings updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── Upload Payment QR Code ──────────────────────────────────────────────────
+app.post('/api/admin/settings/qr', upload.single('qrCode'), async (req, res) => {
+  try {
+    await ensureTablesExist();
+    if (!req.file) {
+      return res.status(400).json({ error: 'No QR code image uploaded' });
+    }
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const qrUrl = await uploadFileToStorage(req.file, baseUrl, 'crackerking/qr');
+    await pool.query(
+      'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+      ['qrCodeUrl', qrUrl, qrUrl]
+    );
+    res.json({ success: true, qrCodeUrl: qrUrl, message: 'Payment QR code uploaded successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/admin/settings/qr', async (req, res) => {
+  try {
+    await ensureTablesExist();
+    await pool.query(
+      'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+      ['qrCodeUrl', '', '']
+    );
+    res.json({ success: true, message: 'Payment QR code removed successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -385,6 +503,18 @@ const sendOrderEmail = async (customerEmail, orderId, orderDetails) => {
     </tr>
   `).join('');
 
+  let currentSettings = {
+    gpayNumber: '6380037709',
+    accountNumber: '194536383261127',
+    ifscCode: 'TMBL0000194',
+    accountName: 'Magical Crackers',
+    whatsappNumber: '6380037709'
+  };
+  try {
+    const [rows] = await pool.query('SELECT * FROM settings');
+    rows.forEach(r => { currentSettings[r.setting_key] = r.setting_value; });
+  } catch (e) {}
+
   const html = `
     <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto;">
       <h2 style="color: #d4af37;">Order Confirmation - ${orderId}</h2>
@@ -415,12 +545,12 @@ const sendOrderEmail = async (customerEmail, orderId, orderDetails) => {
         <h3 style="margin-top: 0; color: #b8860b;">Important Payment Details</h3>
         <p style="margin-bottom: 5px;">Please complete your payment to confirm the order:</p>
         <ul style="margin-top: 0;">
-          <li><strong>GPay:</strong> 6380037709</li>
-          <li><strong>Account No:</strong> 194536383261127</li>
-          <li><strong>IFSC Code:</strong> TMBL0000194</li>
-          <li><strong>Account Name:</strong> Magical Crackers</li>
+          <li><strong>GPay / UPI:</strong> ${currentSettings.gpayNumber || '6380037709'}</li>
+          <li><strong>Account No:</strong> ${currentSettings.accountNumber || '194536383261127'}</li>
+          <li><strong>IFSC Code:</strong> ${currentSettings.ifscCode || 'TMBL0000194'}</li>
+          <li><strong>Account Name:</strong> ${currentSettings.accountName || 'Magical Crackers'}</li>
         </ul>
-        <p style="margin-bottom: 0;">Once paid, please share the screenshot via WhatsApp at <strong>+91 6380037709</strong>.</p>
+        <p style="margin-bottom: 0;">Once paid, please share the screenshot via WhatsApp at <strong>+91 ${currentSettings.whatsappNumber || currentSettings.gpayNumber || '6380037709'}</strong>.</p>
       </div>
       
       <p>If you have any questions, feel free to reply to this email or contact us via WhatsApp.</p>
@@ -508,8 +638,13 @@ app.post('/api/orders/:id/payment-proof', upload.single('paymentProof'), async (
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
+<<<<<<< HEAD
     const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
     const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
+=======
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const fileUrl = await uploadFileToStorage(req.file, baseUrl, 'crackerking/proofs');
+>>>>>>> ceee1c4b1a917ca3bc5bfd88cd827db86c8176bb
     
     await pool.query('UPDATE orders SET paymentProofUrl = ? WHERE id = ?', [fileUrl, req.params.id]);
     
@@ -536,16 +671,24 @@ app.post('/api/admin/login', (req, res) => {
 app.post('/api/admin/products', upload.any(), async (req, res) => {
   try {
     await ensureTablesExist();
-    const { name, category, description, originalPrice, discountedPrice, discount, badge, stock, imageUrls } = req.body;
+    const { name, category, boxType, piecesPerBox, description, originalPrice, discountedPrice, discount, badge, stock, imageUrls } = req.body;
     
     let allImages = [];
 
     // Process uploaded file images (accepts any field name)
     if (req.files && req.files.length > 0) {
+<<<<<<< HEAD
       const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
       req.files.forEach(file => {
         allImages.push(`${baseUrl}/uploads/${file.filename}`);
       });
+=======
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      for (const file of req.files) {
+        const fileUrl = await uploadFileToStorage(file, baseUrl, 'crackerking/products');
+        allImages.push(fileUrl);
+      }
+>>>>>>> ceee1c4b1a917ca3bc5bfd88cd827db86c8176bb
     }
 
     // Process additional image URLs passed as text or array
@@ -593,11 +736,13 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
     const mainImageUrl = allImages.length > 0 ? allImages[0] : '';
 
     const [result] = await pool.query(
-      `INSERT INTO products (name, category, description, originalPrice, discountedPrice, discount, badge, imageUrl, images, stock)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (name, category, boxType, piecesPerBox, description, originalPrice, discountedPrice, discount, badge, imageUrl, images, stock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name.trim(),
         mainCategory,
+        (boxType || '1 Box').trim(),
+        (piecesPerBox || '').trim(),
         description || '',
         mrpPrice,
         sellingPrice,
@@ -620,7 +765,7 @@ app.put('/api/admin/products/:id', upload.any(), async (req, res) => {
   try {
     await ensureTablesExist();
     const productId = req.params.id;
-    const { name, category, description, originalPrice, discountedPrice, discount, badge, stock, existingImages } = req.body;
+    const { name, category, boxType, piecesPerBox, description, originalPrice, discountedPrice, discount, badge, stock, existingImages } = req.body;
 
     // Check if product exists
     const [existingRows] = await pool.query('SELECT * FROM products WHERE id = ?', [productId]);
@@ -650,10 +795,18 @@ app.put('/api/admin/products/:id', upload.any(), async (req, res) => {
 
     // Append newly uploaded image files
     if (req.files && req.files.length > 0) {
+<<<<<<< HEAD
       const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
       req.files.forEach(file => {
         allImages.push(`${baseUrl}/uploads/${file.filename}`);
       });
+=======
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      for (const file of req.files) {
+        const fileUrl = await uploadFileToStorage(file, baseUrl, 'crackerking/products');
+        allImages.push(fileUrl);
+      }
+>>>>>>> ceee1c4b1a917ca3bc5bfd88cd827db86c8176bb
     }
 
     const updatedName = name ? name.trim() : oldProduct.name;
@@ -676,12 +829,14 @@ app.put('/api/admin/products/:id', upload.any(), async (req, res) => {
 
     await pool.query(
       `UPDATE products SET 
-        name = ?, category = ?, description = ?, originalPrice = ?, 
+        name = ?, category = ?, boxType = ?, piecesPerBox = ?, description = ?, originalPrice = ?, 
         discountedPrice = ?, discount = ?, badge = ?, imageUrl = ?, images = ?, stock = ?
        WHERE id = ?`,
       [
         updatedName,
         mainCategory,
+        boxType !== undefined ? String(boxType).trim() : (oldProduct.boxType || '1 Box'),
+        piecesPerBox !== undefined ? String(piecesPerBox).trim() : (oldProduct.piecesPerBox || ''),
         description !== undefined ? description : oldProduct.description,
         mrpPrice,
         sellingPrice,
