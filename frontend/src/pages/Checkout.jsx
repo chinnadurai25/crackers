@@ -35,7 +35,7 @@ const Checkout = () => {
   };
 
   const [form, setForm] = useState({
-    customerName: '', mobile: '', whatsapp: '',
+    customerName: '', mobile: '', whatsapp: '', email: '',
     address: '', landmark: '', city: '', pincode: ''
   });
 
@@ -90,6 +90,7 @@ const Checkout = () => {
           id: data.orderId,
           customerName: form.customerName,
           mobile: form.mobile,
+          email: form.email,
           address: form.address,
           city: form.city,
           pincode: form.pincode,
@@ -167,13 +168,19 @@ const Checkout = () => {
                 <label className="text-gray-400 text-sm">WhatsApp Number (for order updates)</label>
                 <input id="checkout-whatsapp" type="tel" className={inputClass} placeholder="Same as mobile or different" value={form.whatsapp} onChange={update('whatsapp')} />
               </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-gray-400 text-sm">Email Address *</label>
+                <input id="checkout-email" type="email" className={inputClass} placeholder="e.g. name@example.com" value={form.email} onChange={update('email')} />
+              </div>
             </div>
             <div className="flex justify-between mt-4">
               <button onClick={() => navigate(-1)} className="px-5 py-3 text-gray-400 hover:text-white transition-colors">← Back</button>
               <button
                 id="checkout-step1-next"
                 onClick={() => {
-                  if (!form.customerName || !form.mobile) { setError('Name and mobile are required'); return; }
+                  if (!form.customerName || !form.mobile || !form.email) { setError('Name, mobile, and email are required'); return; }
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (!emailRegex.test(form.email)) { setError('Please enter a valid email address'); return; }
                   setError(''); setStep(2);
                 }}
                 className="btn-primary"

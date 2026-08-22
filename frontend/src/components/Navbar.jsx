@@ -83,6 +83,9 @@ const Navbar = ({ onCartClick }) => {
           <Link to="/tracking" className="hover:text-festival-gold transition-colors">Track Order</Link>
           <Link to="/contact" className="hover:text-festival-gold transition-colors">Contact</Link>
           <Link to="/safety-tips" className="hover:text-festival-gold transition-colors">Safety Tips</Link>
+          <Link to="/payment" className="text-festival-gold hover:text-white transition-colors font-bold">
+            Pay Now
+          </Link>
         </div>
 
         {/* Cart & Mobile Toggle */}
@@ -154,6 +157,13 @@ const Navbar = ({ onCartClick }) => {
               </Link>
               <Link to="/safety-tips" className="text-gray-300 hover:text-festival-gold text-lg font-medium transition-colors" onClick={() => setIsMobileMenuOpen(false)}>
                 Safety Tips
+              </Link>
+              <Link 
+                to="/payment"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="text-festival-gold hover:text-white text-lg font-medium transition-colors text-left"
+              >
+                Pay Now
               </Link>
             </div>
           </motion.div>

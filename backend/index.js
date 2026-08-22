@@ -5,6 +5,7 @@ const mysql = require('mysql2/promise');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 dotenv.config();
 
@@ -86,6 +87,7 @@ const ensureTablesExist = async () => {
         customerName VARCHAR(255) NOT NULL,
         mobile VARCHAR(20) NOT NULL,
         whatsapp VARCHAR(20),
+        email VARCHAR(255),
         address TEXT NOT NULL,
         landmark VARCHAR(255),
         city VARCHAR(100) NOT NULL,
@@ -146,6 +148,13 @@ const ensureTablesExist = async () => {
     // Ensure transportDetails column exists in orders table
     try {
       await pool.query('ALTER TABLE orders ADD COLUMN transportDetails JSON');
+    } catch (e) {
+      // Column already exists
+    }
+
+    // Ensure email column exists in orders table
+    try {
+      await pool.query('ALTER TABLE orders ADD COLUMN email VARCHAR(255)');
     } catch (e) {
       // Column already exists
     }
@@ -349,12 +358,94 @@ const parseOrderStatusHistory = (order) => {
 };
 
 // ─── Create Order ────────────────────────────────────────────────────────────
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: process.env.SMTP_PORT || 587,
+  secure: process.env.SMTP_PORT == 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
+const sendOrderEmail = async (customerEmail, orderId, orderDetails) => {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !customerEmail) {
+    return;
+  }
+  
+  const { customerName, items, totalAmount } = orderDetails;
+  
+  let itemsHtml = items.map(item => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${item.name}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹${item.price}</td>
+      <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">₹${item.price * item.quantity}</td>
+    </tr>
+  `).join('');
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto;">
+      <h2 style="color: #d4af37;">Order Confirmation - ${orderId}</h2>
+      <p>Dear ${customerName},</p>
+      <p>Thank you for your order! Your order has been successfully placed. Below are your order details:</p>
+      
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+          <tr style="background-color: #f8f8f8;">
+            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: left;">Item</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: center;">Qty</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: right;">Price</th>
+            <th style="padding: 8px; border-bottom: 2px solid #ddd; text-align: right;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="padding: 8px; text-align: right; font-weight: bold;">Grand Total:</td>
+            <td style="padding: 8px; text-align: right; font-weight: bold; color: #d4af37;">₹${totalAmount}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div style="background-color: #fef8e5; padding: 15px; border-radius: 5px; border: 1px solid #f9e29c;">
+        <h3 style="margin-top: 0; color: #b8860b;">Important Payment Details</h3>
+        <p style="margin-bottom: 5px;">Please complete your payment to confirm the order:</p>
+        <ul style="margin-top: 0;">
+          <li><strong>GPay:</strong> 6380037709</li>
+          <li><strong>Account No:</strong> 194536383261127</li>
+          <li><strong>IFSC Code:</strong> TMBL0000194</li>
+          <li><strong>Account Name:</strong> Magical Crackers</li>
+        </ul>
+        <p style="margin-bottom: 0;">Once paid, please share the screenshot via WhatsApp at <strong>+91 6380037709</strong>.</p>
+      </div>
+      
+      <p>If you have any questions, feel free to reply to this email or contact us via WhatsApp.</p>
+      <p>Best Regards,<br/><strong>Magical Crackers Team</strong></p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"Magical Crackers" <${process.env.SMTP_USER}>`,
+      to: customerEmail,
+      subject: `Order Confirmation - ${orderId}`,
+      html: html,
+    });
+    console.log(`Order confirmation email sent to ${customerEmail}`);
+  } catch (error) {
+    console.error('Error sending order email:', error);
+  }
+};
+
 app.post('/api/orders', async (req, res) => {
   try {
     await ensureTablesExist();
-    const { customerName, mobile, whatsapp, address, landmark, city, pincode, items, totalAmount } = req.body;
+    const { customerName, mobile, whatsapp, email, address, landmark, city, pincode, items, totalAmount } = req.body;
 
-    if (!customerName || !mobile || !address || !city || !pincode || !items || !totalAmount) {
+    if (!customerName || !mobile || !email || !address || !city || !pincode || !items || !totalAmount) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -363,10 +454,12 @@ app.post('/api/orders', async (req, res) => {
 
     await pool.query(
       `INSERT INTO orders 
-        (id, customerName, mobile, whatsapp, address, landmark, city, pincode, items, totalAmount, status, statusHistory) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Order Received', ?)`,
-      [orderId, customerName, mobile, whatsapp || mobile, address, landmark || '', city, pincode, JSON.stringify(items), totalAmount, JSON.stringify(initialHistory)]
+        (id, customerName, mobile, whatsapp, email, address, landmark, city, pincode, items, totalAmount, status, statusHistory) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Order Received', ?)`,
+      [orderId, customerName, mobile, whatsapp || mobile, email, address, landmark || '', city, pincode, JSON.stringify(items), totalAmount, JSON.stringify(initialHistory)]
     );
+
+    sendOrderEmail(email, orderId, req.body);
 
     res.json({ success: true, orderId, message: 'Order placed successfully!' });
   } catch (error) {
