@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings, FileText, Users, Truck, CreditCard, Filter, Landmark, Smartphone, QrCode, Cloud } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings, FileText, Users, Truck, CreditCard, Filter, Landmark, Smartphone, QrCode } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import BillPreviewModal from '../components/BillPreviewModal';
 
@@ -113,9 +113,6 @@ const AdminPanel = () => {
   const [qrFile, setQrFile] = useState(null);
   const [qrPreview, setQrPreview] = useState('');
   const [qrUploading, setQrUploading] = useState(false);
-  const [cloudinaryCloudName, setCloudinaryCloudName] = useState('');
-  const [cloudinaryApiKey, setCloudinaryApiKey] = useState('');
-  const [cloudinaryApiSecret, setCloudinaryApiSecret] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [settingsError, setSettingsError] = useState('');
@@ -202,9 +199,6 @@ const AdminPanel = () => {
         if (data.settings.gpayNumber !== undefined) setGpayNumber(data.settings.gpayNumber);
         if (data.settings.whatsappNumber !== undefined) setWhatsappNumber(data.settings.whatsappNumber);
         if (data.settings.qrCodeUrl !== undefined) setQrCodeUrl(data.settings.qrCodeUrl);
-        if (data.settings.cloudinaryCloudName !== undefined) setCloudinaryCloudName(data.settings.cloudinaryCloudName);
-        if (data.settings.cloudinaryApiKey !== undefined) setCloudinaryApiKey(data.settings.cloudinaryApiKey);
-        if (data.settings.cloudinaryApiSecret !== undefined) setCloudinaryApiSecret(data.settings.cloudinaryApiSecret);
       }
     } catch { }
   };
@@ -573,10 +567,7 @@ const AdminPanel = () => {
             accountNumber,
             ifscCode,
             gpayNumber,
-            whatsappNumber,
-            cloudinaryCloudName,
-            cloudinaryApiKey,
-            cloudinaryApiSecret
+            whatsappNumber
           }
         })
       });
@@ -2241,65 +2232,6 @@ const AdminPanel = () => {
                   />
                   <p className="text-gray-500 text-xs mt-1">This fee is automatically applied to all new orders during checkout.</p>
                 </div>
-              </div>
-
-              {/* Section 4: Cloudinary Permanent Image Storage */}
-              <div className="space-y-4 bg-white/5 p-5 sm:p-6 rounded-2xl border border-white/10">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <h4 className="text-lg font-bold text-festival-gold flex items-center gap-2">
-                    <Cloud size={20} /> Permanent Cloud Image Storage (Cloudinary)
-                  </h4>
-                  {cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret ? (
-                    <span className="text-xs bg-green-500/10 text-green-400 border border-green-500/20 px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Cloud Storage Active
-                    </span>
-                  ) : (
-                    <span className="text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2.5 py-1 rounded-full font-semibold">
-                      Local Storage (Images may reset on host restarts)
-                    </span>
-                  )}
-                </div>
-                <p className="text-gray-400 text-xs leading-relaxed">
-                  Enter your free <strong>Cloudinary</strong> credentials below to ensure all uploaded product photos, payment QR codes, and payment proofs are stored <strong>permanently in the cloud</strong> and never disappear when the live GoDaddy server restarts.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                  <div className="space-y-1.5">
-                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Cloud Name</label>
-                    <input
-                      type="text"
-                      value={cloudinaryCloudName}
-                      onChange={(e) => setCloudinaryCloudName(e.target.value)}
-                      className={inputClass}
-                      placeholder="e.g. dxyz1234"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">API Key</label>
-                    <input
-                      type="text"
-                      value={cloudinaryApiKey}
-                      onChange={(e) => setCloudinaryApiKey(e.target.value)}
-                      className={inputClass}
-                      placeholder="e.g. 123456789012345"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">API Secret</label>
-                    <input
-                      type="password"
-                      value={cloudinaryApiSecret}
-                      onChange={(e) => setCloudinaryApiSecret(e.target.value)}
-                      className={inputClass}
-                      placeholder="••••••••••••••••"
-                    />
-                  </div>
-                </div>
-                <p className="text-gray-500 text-[11px]">
-                  Get these free at <a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="text-festival-gold underline">cloudinary.com</a> (Dashboard → Product Environment Credentials).
-                </p>
               </div>
 
               <div className="pt-2">
