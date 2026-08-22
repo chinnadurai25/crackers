@@ -11,11 +11,7 @@ const Hero = () => {
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
-    navigate(`/?search=${encodeURIComponent(searchTerm.trim())}#shop`);
-    const shopElem = document.getElementById('shop');
-    if (shopElem) {
-      shopElem.scrollIntoView({ behavior: 'smooth' });
-    }
+    navigate(`/products?search=${encodeURIComponent(searchTerm.trim())}`);
   };
 
   // Staggered text animation variants
