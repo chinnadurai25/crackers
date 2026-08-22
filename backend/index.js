@@ -10,6 +10,7 @@ const nodemailer = require('nodemailer');
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(cors());
 app.use(express.json());
 
@@ -507,7 +508,7 @@ app.post('/api/orders/:id/payment-proof', upload.single('paymentProof'), async (
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
     const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
     
     await pool.query('UPDATE orders SET paymentProofUrl = ? WHERE id = ?', [fileUrl, req.params.id]);
@@ -541,7 +542,7 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
 
     // Process uploaded file images (accepts any field name)
     if (req.files && req.files.length > 0) {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
       req.files.forEach(file => {
         allImages.push(`${baseUrl}/uploads/${file.filename}`);
       });
@@ -649,7 +650,7 @@ app.put('/api/admin/products/:id', upload.any(), async (req, res) => {
 
     // Append newly uploaded image files
     if (req.files && req.files.length > 0) {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
       req.files.forEach(file => {
         allImages.push(`${baseUrl}/uploads/${file.filename}`);
       });
