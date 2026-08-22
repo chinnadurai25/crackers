@@ -554,6 +554,10 @@ const sendOrderEmail = async (customerEmail, orderId, orderDetails) => {
       </div>
       
       <p>If you have any questions, feel free to reply to this email or contact us via WhatsApp.</p>
+      <div style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; text-align: center; border: 1px dashed #d4af37;">
+        <p style="margin: 0 0 5px 0; color: #333; font-weight: bold;">To purchase more crackers, please visit our website:</p>
+        <a href="https://www.sivakasicrackers.org/" style="color: #d4af37; font-size: 16px; font-weight: bold; text-decoration: none;">www.sivakasicrackers.org</a>
+      </div>
       <p>Best Regards,<br/><strong>Magical Crackers Team</strong></p>
     </div>
   `;
@@ -960,4 +964,5 @@ app.listen(PORT, () => {
 
 process.on('uncaughtException', err => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
+
 
