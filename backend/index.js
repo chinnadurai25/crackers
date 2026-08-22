@@ -638,13 +638,8 @@ app.post('/api/orders/:id/payment-proof', upload.single('paymentProof'), async (
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
-<<<<<<< HEAD
     const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
-    const fileUrl = `${baseUrl}/uploads/${req.file.filename}`;
-=======
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const fileUrl = await uploadFileToStorage(req.file, baseUrl, 'crackerking/proofs');
->>>>>>> ceee1c4b1a917ca3bc5bfd88cd827db86c8176bb
     
     await pool.query('UPDATE orders SET paymentProofUrl = ? WHERE id = ?', [fileUrl, req.params.id]);
     
@@ -677,18 +672,11 @@ app.post('/api/admin/products', upload.any(), async (req, res) => {
 
     // Process uploaded file images (accepts any field name)
     if (req.files && req.files.length > 0) {
-<<<<<<< HEAD
       const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
-      req.files.forEach(file => {
-        allImages.push(`${baseUrl}/uploads/${file.filename}`);
-      });
-=======
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
       for (const file of req.files) {
         const fileUrl = await uploadFileToStorage(file, baseUrl, 'crackerking/products');
         allImages.push(fileUrl);
       }
->>>>>>> ceee1c4b1a917ca3bc5bfd88cd827db86c8176bb
     }
 
     // Process additional image URLs passed as text or array
@@ -795,18 +783,11 @@ app.put('/api/admin/products/:id', upload.any(), async (req, res) => {
 
     // Append newly uploaded image files
     if (req.files && req.files.length > 0) {
-<<<<<<< HEAD
       const baseUrl = process.env.BASE_URL || (req.headers['x-forwarded-host'] ? `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host']}` : `${req.protocol}://${req.get('host')}`);
-      req.files.forEach(file => {
-        allImages.push(`${baseUrl}/uploads/${file.filename}`);
-      });
-=======
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
       for (const file of req.files) {
         const fileUrl = await uploadFileToStorage(file, baseUrl, 'crackerking/products');
         allImages.push(fileUrl);
       }
->>>>>>> ceee1c4b1a917ca3bc5bfd88cd827db86c8176bb
     }
 
     const updatedName = name ? name.trim() : oldProduct.name;
@@ -979,3 +960,4 @@ app.listen(PORT, () => {
 
 process.on('uncaughtException', err => console.error('Uncaught Exception:', err));
 process.on('unhandledRejection', err => console.error('Unhandled Rejection:', err));
+
