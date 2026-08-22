@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { generateBill } from '../utils/generateBill';
-import { FileDown, Upload, Landmark, Copy, CheckCircle2, Smartphone, ShieldCheck } from 'lucide-react';
+import { FileDown, Upload, Landmark, Copy, CheckCircle2, Smartphone, ShieldCheck, QrCode } from 'lucide-react';
 import BillPreviewModal from '../components/BillPreviewModal';
 import { API_BASE_URL } from '../utils/apiConfig';
 
@@ -27,6 +27,36 @@ const Checkout = () => {
   const [proofError, setProofError] = useState('');
   
   const [copiedField, setCopiedField] = useState('');
+  const [paymentDetails, setPaymentDetails] = useState({
+    accountName: 'Magical Crackers',
+    bankName: 'Tamilnad Mercantile Bank',
+    accountNumber: '194536383261127',
+    ifscCode: 'TMBL0000194',
+    gpayNumber: '6380037709',
+    whatsappNumber: '6380037709',
+    qrCodeUrl: ''
+  });
+
+  useEffect(() => {
+    const loadPaymentSettings = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/settings`);
+        const data = await res.json();
+        if (data.success && data.settings) {
+          setPaymentDetails({
+            accountName: data.settings.accountName || 'Magical Crackers',
+            bankName: data.settings.bankName || '',
+            accountNumber: data.settings.accountNumber || '194536383261127',
+            ifscCode: data.settings.ifscCode || 'TMBL0000194',
+            gpayNumber: data.settings.gpayNumber || '6380037709',
+            whatsappNumber: data.settings.whatsappNumber || data.settings.gpayNumber || '6380037709',
+            qrCodeUrl: data.settings.qrCodeUrl || ''
+          });
+        }
+      } catch {}
+    };
+    loadPaymentSettings();
+  }, []);
 
   const handleCopy = (text, field) => {
     navigator.clipboard.writeText(text);
@@ -79,7 +109,15 @@ const Checkout = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          items: cartItems.map(i => ({ id: i.id, name: i.name, category: i.category || 'General', quantity: i.quantity, price: i.discountedPrice })),
+          items: cartItems.map(i => ({
+            id: i.id,
+            name: i.name,
+            category: i.category || 'General',
+            boxType: i.boxType || '1 Box',
+            piecesPerBox: i.piecesPerBox || '',
+            quantity: i.quantity,
+            price: i.discountedPrice
+          })),
           totalAmount: cartTotal + (deliveryFee || 0),
         }),
       });
@@ -94,7 +132,14 @@ const Checkout = () => {
           address: form.address,
           city: form.city,
           pincode: form.pincode,
-          items: cartItems.map(i => ({ name: i.name, category: i.category || 'General', quantity: i.quantity, price: i.discountedPrice })),
+          items: cartItems.map(i => ({
+            name: i.name,
+            category: i.category || 'General',
+            boxType: i.boxType || '1 Box',
+            piecesPerBox: i.piecesPerBox || '',
+            quantity: i.quantity,
+            price: i.discountedPrice
+          })),
           totalAmount: cartTotal + (deliveryFee || 0),
           createdAt: new Date().toISOString()
         });
@@ -369,54 +414,79 @@ const Checkout = () => {
               <p className="text-gray-400 text-sm">Transfer amount to complete your order</p>
             </div>
             
+            {/* Payment QR Code (if available) */}
+            {paymentDetails.qrCodeUrl && (
+              <div className="bg-gradient-to-br from-festival-gold/20 to-festival-orange/10 p-1 rounded-2xl mb-6 border border-festival-gold/30 text-center">
+                <div className="bg-[#0f0f16] rounded-xl p-4 flex flex-col items-center">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-festival-gold/10 text-festival-gold rounded-full text-xs font-bold uppercase tracking-wider mb-2 border border-festival-gold/20">
+                    <QrCode size={12} /> Scan & Pay via UPI
+                  </div>
+                  <div className="bg-white p-2 rounded-xl border border-festival-gold/40 my-1 inline-block">
+                    <img
+                      src={paymentDetails.qrCodeUrl}
+                      alt="Payment QR Code"
+                      className="w-40 h-40 sm:w-44 sm:h-44 object-contain rounded-md"
+                    />
+                  </div>
+                  <p className="text-gray-400 text-[11px] mt-1 font-medium">GPay • PhonePe • Paytm • BHIM</p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-gradient-to-br from-white/10 to-white/5 p-1 rounded-2xl mb-6 shadow-xl">
               <div className="bg-[#0f0f16] rounded-xl p-5 space-y-4">
                 <div className="flex items-center justify-between border-b border-white/5 pb-4">
                   <div>
                     <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 font-bold">Account Name</p>
-                    <p className="text-white font-bold text-lg">Magical Crackers</p>
+                    <p className="text-white font-bold text-lg">{paymentDetails.accountName}</p>
+                    {paymentDetails.bankName && (
+                      <p className="text-gray-400 text-xs mt-0.5">{paymentDetails.bankName}</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 group">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 font-bold truncate">Account Number</p>
-                    <p className="text-festival-gold font-mono font-bold text-lg sm:text-xl tracking-wider break-all">194536383261127</p>
+                    <p className="text-festival-gold font-mono font-bold text-lg sm:text-xl tracking-wider break-all">{paymentDetails.accountNumber}</p>
                   </div>
                   <button 
-                    onClick={() => handleCopy('194536383261127', 'acc')}
+                    onClick={() => handleCopy(paymentDetails.accountNumber, 'acc')}
                     className="shrink-0 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                    title="Copy Account Number"
                   >
                     {copiedField === 'acc' ? <CheckCircle2 size={20} className="text-green-400" /> : <Copy size={20} />}
                   </button>
                 </div>
 
                 <div className="flex items-center justify-between gap-2 group">
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 font-bold truncate">IFSC Code</p>
-                    <p className="text-festival-gold font-mono font-bold text-lg sm:text-xl tracking-wider break-all">TMBL0000194</p>
+                    <p className="text-festival-gold font-mono font-bold text-lg sm:text-xl tracking-wider break-all">{paymentDetails.ifscCode}</p>
                   </div>
                   <button 
-                    onClick={() => handleCopy('TMBL0000194', 'ifsc')}
+                    onClick={() => handleCopy(paymentDetails.ifscCode, 'ifsc')}
                     className="shrink-0 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                    title="Copy IFSC Code"
                   >
                     {copiedField === 'ifsc' ? <CheckCircle2 size={20} className="text-green-400" /> : <Copy size={20} />}
                   </button>
                 </div>
                 
                 <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-2 group">
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="shrink-0 w-10 h-10 bg-white/5 rounded-full hidden sm:flex items-center justify-center border border-white/10">
                       <Smartphone size={18} className="text-gray-300" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5 font-bold truncate">GPay Number</p>
-                      <p className="text-white font-mono font-bold text-lg sm:text-xl tracking-wider break-all">6380037709</p>
+                      <p className="text-gray-500 text-xs uppercase tracking-wider mb-0.5 font-bold truncate">GPay / PhonePe / UPI</p>
+                      <p className="text-white font-mono font-bold text-lg sm:text-xl tracking-wider break-all">{paymentDetails.gpayNumber}</p>
                     </div>
                   </div>
                   <button 
-                    onClick={() => handleCopy('6380037709', 'gpay')}
+                    onClick={() => handleCopy(paymentDetails.gpayNumber, 'gpay')}
                     className="shrink-0 p-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors"
+                    title="Copy GPay Number"
                   >
                     {copiedField === 'gpay' ? <CheckCircle2 size={20} className="text-green-400" /> : <Copy size={20} />}
                   </button>
@@ -432,7 +502,7 @@ const Checkout = () => {
             </div>
 
             <a
-              href="https://wa.me/916380037709"
+              href={`https://wa.me/${(paymentDetails.whatsappNumber || paymentDetails.gpayNumber || '6380037709').replace(/[^0-9]/g, '').length === 10 ? '91' + (paymentDetails.whatsappNumber || paymentDetails.gpayNumber || '6380037709').replace(/[^0-9]/g, '') : (paymentDetails.whatsappNumber || paymentDetails.gpayNumber || '6380037709').replace(/[^0-9]/g, '')}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold py-3 px-6 rounded-full flex items-center justify-center gap-2 transition-colors shadow-[0_0_15px_rgba(37,211,102,0.4)] mb-8"

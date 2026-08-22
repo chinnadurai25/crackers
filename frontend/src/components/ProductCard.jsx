@@ -125,10 +125,17 @@ const ProductCard = ({ product }) => {
 
       {/* Product Info */}
       <div className="p-4 flex flex-col flex-grow">
-        {/* Category Label */}
-        <p className="text-festival-gold text-xs font-bold tracking-widest uppercase mb-1 truncate">
-          {product.category}
-        </p>
+        {/* Category & Box Info */}
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <p className="text-festival-gold text-xs font-bold tracking-widest uppercase truncate">
+            {product.category}
+          </p>
+          {(product.boxType || product.piecesPerBox) && (
+            <span className="shrink-0 bg-festival-gold/10 text-festival-gold border border-festival-gold/30 text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+              📦 {product.boxType || '1 Box'}{product.piecesPerBox ? ` • ${product.piecesPerBox}` : ''}
+            </span>
+          )}
+        </div>
 
         {/* Name — always 1 line so all cards stay same height */}
         <h3 className="text-white font-bold text-base mb-1 leading-tight line-clamp-1">

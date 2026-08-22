@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings, FileText, Users, Truck, CreditCard, Filter } from 'lucide-react';
+import { Package, RefreshCw, Plus, Trash2, Lock, LogOut, ShoppingBag, Layers, Upload, Images, Pencil, X, Eye, Calendar, Clock, CheckCircle2, Printer, Settings, FileText, Users, Truck, CreditCard, Filter, Landmark, Smartphone, QrCode, Cloud } from 'lucide-react';
 import { API_BASE_URL } from '../utils/apiConfig';
 import BillPreviewModal from '../components/BillPreviewModal';
 
@@ -58,6 +58,7 @@ const AdminPanel = () => {
   const [selectedStatusOrder, setSelectedStatusOrder] = useState(null);
   const [selectedBillOrder, setSelectedBillOrder] = useState(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState('ALL');
+  const [orderSearch, setOrderSearch] = useState('');
   const [shippingModal, setShippingModal] = useState({ open: false, orderId: null, transportName: '', llrNo: '', contactNumber: '' });
 
   // Products state
@@ -86,6 +87,8 @@ const AdminPanel = () => {
     name: '',
     category: 'Flower Pots',
     customCategory: '',
+    boxType: '1 Box',
+    piecesPerBox: '10 Pcs',
     description: '',
     originalPrice: '',
     discountedPrice: '',
@@ -98,8 +101,21 @@ const AdminPanel = () => {
   const [addProductError, setAddProductError] = useState('');
   const [addProductLoading, setAddProductLoading] = useState(false);
 
-  // Settings state
-  const [deliveryFee, setDeliveryFee] = useState('');
+  // Settings & Payment Details state
+  const [deliveryFee, setDeliveryFee] = useState('0');
+  const [accountName, setAccountName] = useState('Magical Crackers');
+  const [bankName, setBankName] = useState('Tamilnad Mercantile Bank');
+  const [accountNumber, setAccountNumber] = useState('194536383261127');
+  const [ifscCode, setIfscCode] = useState('TMBL0000194');
+  const [gpayNumber, setGpayNumber] = useState('6380037709');
+  const [whatsappNumber, setWhatsappNumber] = useState('6380037709');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [qrFile, setQrFile] = useState(null);
+  const [qrPreview, setQrPreview] = useState('');
+  const [qrUploading, setQrUploading] = useState(false);
+  const [cloudinaryCloudName, setCloudinaryCloudName] = useState('');
+  const [cloudinaryApiKey, setCloudinaryApiKey] = useState('');
+  const [cloudinaryApiSecret, setCloudinaryApiSecret] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState('');
   const [settingsError, setSettingsError] = useState('');
@@ -178,7 +194,17 @@ const AdminPanel = () => {
       const res = await fetch(`${API_BASE_URL}/api/settings`);
       const data = await res.json();
       if (data.success && data.settings) {
-        setDeliveryFee(data.settings.deliveryFee || '0');
+        if (data.settings.deliveryFee !== undefined) setDeliveryFee(data.settings.deliveryFee);
+        if (data.settings.accountName !== undefined) setAccountName(data.settings.accountName);
+        if (data.settings.bankName !== undefined) setBankName(data.settings.bankName);
+        if (data.settings.accountNumber !== undefined) setAccountNumber(data.settings.accountNumber);
+        if (data.settings.ifscCode !== undefined) setIfscCode(data.settings.ifscCode);
+        if (data.settings.gpayNumber !== undefined) setGpayNumber(data.settings.gpayNumber);
+        if (data.settings.whatsappNumber !== undefined) setWhatsappNumber(data.settings.whatsappNumber);
+        if (data.settings.qrCodeUrl !== undefined) setQrCodeUrl(data.settings.qrCodeUrl);
+        if (data.settings.cloudinaryCloudName !== undefined) setCloudinaryCloudName(data.settings.cloudinaryCloudName);
+        if (data.settings.cloudinaryApiKey !== undefined) setCloudinaryApiKey(data.settings.cloudinaryApiKey);
+        if (data.settings.cloudinaryApiSecret !== undefined) setCloudinaryApiSecret(data.settings.cloudinaryApiSecret);
       }
     } catch { }
   };
@@ -402,6 +428,8 @@ const AdminPanel = () => {
       const formData = new FormData();
       formData.append('name', newProduct.name);
       formData.append('category', targetCategory);
+      formData.append('boxType', newProduct.boxType || '1 Box');
+      formData.append('piecesPerBox', newProduct.piecesPerBox || '');
       formData.append('description', newProduct.description || '');
       formData.append('discountedPrice', Number(newProduct.discountedPrice));
       if (newProduct.originalPrice) {
@@ -426,6 +454,8 @@ const AdminPanel = () => {
           name: '',
           category: categories.length > 0 ? categories[0].name : 'Flower Pots',
           customCategory: '',
+          boxType: '1 Box',
+          piecesPerBox: '10 Pcs',
           description: '',
           originalPrice: '',
           discountedPrice: '',
@@ -453,6 +483,8 @@ const AdminPanel = () => {
       id: product.id,
       name: product.name,
       category: product.category || 'General',
+      boxType: product.boxType || '1 Box',
+      piecesPerBox: product.piecesPerBox || '',
       description: product.description || '',
       discountedPrice: product.discountedPrice || '',
       originalPrice: (product.originalPrice && Number(product.originalPrice) > Number(product.discountedPrice)) ? product.originalPrice : '',
@@ -476,6 +508,8 @@ const AdminPanel = () => {
       const formData = new FormData();
       formData.append('name', editingProduct.name);
       formData.append('category', editingProduct.category);
+      formData.append('boxType', editingProduct.boxType || '1 Box');
+      formData.append('piecesPerBox', editingProduct.piecesPerBox || '');
       formData.append('description', editingProduct.description);
       formData.append('discountedPrice', Number(editingProduct.discountedPrice));
       if (editingProduct.originalPrice) {
@@ -531,11 +565,24 @@ const AdminPanel = () => {
       const res = await fetch(`${API_BASE_URL}/api/admin/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: { deliveryFee } })
+        body: JSON.stringify({
+          settings: {
+            deliveryFee,
+            accountName,
+            bankName,
+            accountNumber,
+            ifscCode,
+            gpayNumber,
+            whatsappNumber,
+            cloudinaryCloudName,
+            cloudinaryApiKey,
+            cloudinaryApiSecret
+          }
+        })
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setSettingsSuccess('Settings updated successfully!');
+        setSettingsSuccess('Settings & Payment details updated successfully! 🎉');
       } else {
         setSettingsError(data.error || 'Failed to update settings');
       }
@@ -543,6 +590,59 @@ const AdminPanel = () => {
       setSettingsError('Could not connect to server.');
     }
     setSettingsLoading(false);
+  };
+
+  // Upload Payment QR Code
+  const handleQrUpload = async (file) => {
+    if (!file) return;
+    setQrUploading(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const formData = new FormData();
+      formData.append('qrCode', file);
+      const res = await fetch(`${API_BASE_URL}/api/admin/settings/qr`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success && data.qrCodeUrl) {
+        setQrCodeUrl(data.qrCodeUrl);
+        setQrFile(null);
+        setQrPreview('');
+        setSettingsSuccess('Payment QR Code uploaded and active! 🎉');
+      } else {
+        setSettingsError(data.error || 'Failed to upload QR code');
+      }
+    } catch {
+      setSettingsError('Could not connect to server.');
+    }
+    setQrUploading(false);
+  };
+
+  // Remove Payment QR Code
+  const handleQrRemove = async () => {
+    if (!window.confirm('Are you sure you want to remove the payment QR code?')) return;
+    setQrUploading(true);
+    setSettingsError('');
+    setSettingsSuccess('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/settings/qr`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setQrCodeUrl('');
+        setQrFile(null);
+        setQrPreview('');
+        setSettingsSuccess('Payment QR Code removed successfully!');
+      } else {
+        setSettingsError(data.error || 'Failed to remove QR code');
+      }
+    } catch {
+      setSettingsError('Could not connect to server.');
+    }
+    setQrUploading(false);
   };
 
   const validOrders = orders.filter(o => o.status !== 'Order Received');
@@ -565,9 +665,17 @@ const AdminPanel = () => {
   const shippedCount = orders.filter(o => o.status === 'Shipped').length;
   const deliveredCount = orders.filter(o => o.status === 'Delivered').length;
 
-  const filteredOrders = orderStatusFilter === 'ALL'
-    ? orders
-    : orders.filter(o => o.status === orderStatusFilter);
+  const filteredOrders = orders
+    .filter(o => orderStatusFilter === 'ALL' || o.status === orderStatusFilter)
+    .filter(o => {
+      if (!orderSearch.trim()) return true;
+      const q = orderSearch.trim().toLowerCase();
+      return (
+        String(o.id).toLowerCase().includes(q) ||
+        (o.customerName && o.customerName.toLowerCase().includes(q)) ||
+        (o.mobile && o.mobile.toLowerCase().includes(q))
+      );
+    });
 
   // ─── LOGIN SCREEN ────────────────────────────────────────────────────────────
   if (!isAuthenticated) {
@@ -775,7 +883,44 @@ const AdminPanel = () => {
                 <Filter size={18} className="text-festival-gold" />
                 <h3 className="text-white font-bold text-sm">Filter Orders by Status</h3>
               </div>
+              {/* Search by Order ID */}
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+                  </svg>
+                </div>
+                <input
+                  id="order-search-input"
+                  type="text"
+                  placeholder="Search by Order ID or Name..."
+                  value={orderSearch}
+                  onChange={(e) => setOrderSearch(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-9 py-2 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-festival-gold transition-colors"
+                />
+                {orderSearch && (
+                  <button
+                    onClick={() => setOrderSearch('')}
+                    className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-white transition-colors"
+                    title="Clear search"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Search result count if searching */}
+            {orderSearch.trim() && (
+              <div className="mb-3 px-1">
+                <p className="text-xs text-gray-400">
+                  {filteredOrders.length === 0
+                    ? <span className="text-red-400 font-medium">No orders found for "<span className="text-white">{orderSearch}</span>"</span>
+                    : <span>Found <span className="text-festival-gold font-bold">{filteredOrders.length}</span> order{filteredOrders.length !== 1 ? 's' : ''} matching "<span className="text-white">{orderSearch}</span>"</span>
+                  }
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <button
@@ -873,9 +1018,23 @@ const AdminPanel = () => {
             <div className="text-center py-20 glass-card">
               <Package size={48} className="mx-auto text-gray-600 mb-4" />
               <p className="text-gray-400 font-semibold mb-1">
-                {orderStatusFilter === 'ALL' ? 'No orders placed yet' : `No orders with status "${orderStatusFilter}"`}
+                {orderSearch.trim()
+                  ? `No orders found matching "${orderSearch}"`
+                  : orderStatusFilter === 'ALL' ? 'No orders placed yet' : `No orders with status "${orderStatusFilter}"`}
               </p>
-              <p className="text-gray-600 text-sm">Customer orders will appear here automatically.</p>
+              <p className="text-gray-600 text-sm">
+                {orderSearch.trim()
+                  ? 'Try a different Order ID or customer name.'
+                  : 'Customer orders will appear here automatically.'}
+              </p>
+              {orderSearch.trim() && (
+                <button
+                  onClick={() => setOrderSearch('')}
+                  className="mt-4 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-sm rounded-xl transition-colors"
+                >
+                  Clear Search
+                </button>
+              )}
             </div>
           ) : (
             filteredOrders.map((order, i) => (
@@ -1031,7 +1190,14 @@ const AdminPanel = () => {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-festival-gold text-[10px] font-bold tracking-widest uppercase block">{p.category}</span>
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <span className="text-festival-gold text-[10px] font-bold tracking-widest uppercase">{p.category}</span>
+                      {(p.boxType || p.piecesPerBox) && (
+                        <span className="bg-white/10 text-gray-300 text-[10px] px-1.5 py-0.5 rounded border border-white/10 font-medium">
+                          📦 {p.boxType || '1 Box'}{p.piecesPerBox ? ` • ${p.piecesPerBox}` : ''}
+                        </span>
+                      )}
+                    </div>
                     <h4 className="text-white font-bold text-sm truncate">{p.name}</h4>
                     <p className="text-gray-400 text-xs line-clamp-1 mb-1">{p.description}</p>
                     <div className="flex items-baseline gap-2">
@@ -1247,6 +1413,36 @@ const AdminPanel = () => {
                 </div>
               )}
 
+              {/* Box / Packing Unit & Pieces inside Box */}
+              <div className="space-y-1.5">
+                <label className="text-gray-300 text-sm font-medium flex items-center gap-1.5">
+                  <span>📦 Box / Packing Unit *</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className={inputClass}
+                  placeholder="e.g. 1 Box, 1 Pkt, 1 Tin, 1 Piece, 1 Bag"
+                  value={newProduct.boxType}
+                  onChange={(e) => setNewProduct({ ...newProduct, boxType: e.target.value })}
+                />
+                <p className="text-gray-500 text-[11px]">Packing type (e.g. 1 Box, 1 Pkt, 1 Tin, 1 Piece)</p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-gray-300 text-sm font-medium flex items-center gap-1.5">
+                  <span>🔢 Pieces inside Box / Pack</span>
+                </label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="e.g. 10 Pcs, 5 Pcs, 100 Pcs, 25 Shots, 1 Pc"
+                  value={newProduct.piecesPerBox}
+                  onChange={(e) => setNewProduct({ ...newProduct, piecesPerBox: e.target.value })}
+                />
+                <p className="text-gray-500 text-[11px]">Number of crackers inside the box (e.g. 10 Pcs, 5 Pcs)</p>
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-gray-300 text-sm font-medium">Selling Price (₹) *</label>
                 <input
@@ -1422,6 +1618,34 @@ const AdminPanel = () => {
                       <option value="Best Seller" className="bg-[#0d0d14]">Best Seller</option>
                       <option value="New" className="bg-[#0d0d14]">New</option>
                     </select>
+                  </div>
+
+                  {/* Box / Packing Unit & Pieces inside Box */}
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-sm font-medium flex items-center gap-1.5">
+                      <span>📦 Box / Packing Unit *</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className={inputClass}
+                      placeholder="e.g. 1 Box, 1 Pkt, 1 Tin, 1 Piece"
+                      value={editingProduct.boxType || ''}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, boxType: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-sm font-medium flex items-center gap-1.5">
+                      <span>🔢 Pieces inside Box / Pack</span>
+                    </label>
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="e.g. 10 Pcs, 5 Pcs, 100 Pcs, 25 Shots"
+                      value={editingProduct.piecesPerBox || ''}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, piecesPerBox: e.target.value })}
+                    />
                   </div>
 
                   <div className="space-y-1.5">
@@ -1785,38 +2009,306 @@ const AdminPanel = () => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="max-w-xl mx-auto"
+          className="max-w-3xl mx-auto"
         >
-          <div className="glass-card p-8 border-white/10">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-              <Settings size={20} className="text-festival-gold" /> Global Settings
-            </h3>
+          <div className="glass-card p-6 sm:p-8 border-white/10">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+              <div>
+                <h3 className="text-2xl font-bold text-white flex items-center gap-2.5">
+                  <Settings size={24} className="text-festival-gold" /> System & Payment Settings
+                </h3>
+                <p className="text-gray-400 text-xs sm:text-sm mt-1">
+                  Manage payment details displayed on the Payment Page, Checkout, and Delivery charges.
+                </p>
+              </div>
+            </div>
 
-            {settingsSuccess && <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-sm">{settingsSuccess}</div>}
-            {settingsError && <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm">{settingsError}</div>}
+            {settingsSuccess && (
+              <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 text-green-400 rounded-xl text-sm font-medium flex items-center gap-2">
+                <CheckCircle2 size={18} /> {settingsSuccess}
+              </div>
+            )}
+            {settingsError && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium">
+                {settingsError}
+              </div>
+            )}
 
-            <form onSubmit={handleUpdateSettings} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-gray-300 text-sm font-medium">Delivery Fee (₹)</label>
-                <div className="flex gap-2 items-center">
+            <form onSubmit={handleUpdateSettings} className="space-y-8">
+              {/* Section 1: Bank Transfer Details */}
+              <div className="space-y-4 bg-white/5 p-5 sm:p-6 rounded-2xl border border-white/10">
+                <h4 className="text-lg font-bold text-festival-gold flex items-center gap-2">
+                  <Landmark size={20} /> Bank Account Transfer Details
+                </h4>
+                <p className="text-gray-400 text-xs">
+                  These details are shown to customers on the Payment Page, in Checkout, and in Order Confirmation emails.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Account Name / Beneficiary *</label>
+                    <input
+                      type="text"
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. Magical Crackers"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Bank Name</label>
+                    <input
+                      type="text"
+                      value={bankName}
+                      onChange={(e) => setBankName(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. Tamilnad Mercantile Bank"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Account Number *</label>
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={(e) => setAccountNumber(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. 194536383261127"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">IFSC Code *</label>
+                    <input
+                      type="text"
+                      value={ifscCode}
+                      onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                      className={inputClass}
+                      placeholder="e.g. TMBL0000194"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: UPI / GPay & WhatsApp */}
+              <div className="space-y-4 bg-white/5 p-5 sm:p-6 rounded-2xl border border-white/10">
+                <h4 className="text-lg font-bold text-festival-gold flex items-center gap-2">
+                  <Smartphone size={20} /> UPI & WhatsApp Confirmation
+                </h4>
+                <p className="text-gray-400 text-xs">
+                  Mobile numbers for receiving payments via GPay/PhonePe and receiving payment screenshot proofs.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">GPay / PhonePe / UPI Number *</label>
+                    <input
+                      type="text"
+                      value={gpayNumber}
+                      onChange={(e) => setGpayNumber(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. 6380037709"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">WhatsApp Number (For Proofs) *</label>
+                    <input
+                      type="text"
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. 6380037709"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Payment QR Code Upload */}
+              <div className="space-y-4 bg-white/5 p-5 sm:p-6 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h4 className="text-lg font-bold text-festival-gold flex items-center gap-2">
+                    <QrCode size={20} /> UPI / Bank Payment QR Code
+                  </h4>
+                  {qrCodeUrl && (
+                    <span className="text-xs bg-green-500/10 text-green-400 border border-green-500/20 px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
+                      <CheckCircle2 size={12} /> QR Code Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-400 text-xs">
+                  Upload your UPI QR code image (GPay, PhonePe, Paytm, or BHIM). When uploaded, customers can scan this QR code directly on the Payment Page and in Checkout.
+                </p>
+
+                <div className="flex flex-col sm:flex-row gap-5 items-start pt-2">
+                  {/* QR Image Preview */}
+                  <div className="w-36 h-36 bg-black/60 rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center relative overflow-hidden flex-shrink-0 group">
+                    {qrPreview || qrCodeUrl ? (
+                      <>
+                        <img
+                          src={qrPreview || qrCodeUrl}
+                          alt="Payment QR Code"
+                          className="w-full h-full object-contain p-2 bg-white rounded-xl"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleQrRemove}
+                            disabled={qrUploading}
+                            className="bg-red-500 hover:bg-red-600 text-white p-2 rounded-full text-xs shadow-lg transition-transform hover:scale-110"
+                            title="Delete QR Code"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-center p-3 text-gray-500">
+                        <QrCode size={36} className="mx-auto mb-1 text-gray-600" />
+                        <span className="text-[11px] block">No QR uploaded</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Controls */}
+                  <div className="flex-1 space-y-3 w-full">
+                    <div className="border border-white/10 rounded-xl p-4 bg-white/5 space-y-2">
+                      <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider block">
+                        Select New QR Code Photo
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        id="paymentQrInput"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            setQrFile(file);
+                            setQrPreview(URL.createObjectURL(file));
+                          }
+                        }}
+                        className="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-festival-gold/10 file:text-festival-gold hover:file:bg-festival-gold/20 cursor-pointer"
+                      />
+                      <p className="text-gray-500 text-[11px]">Accepts PNG, JPG, JPEG, WEBP screenshots from GPay/PhonePe</p>
+                    </div>
+
+                    <div className="flex gap-2 flex-wrap">
+                      {qrFile && (
+                        <button
+                          type="button"
+                          onClick={() => handleQrUpload(qrFile)}
+                          disabled={qrUploading}
+                          className="btn-primary text-xs py-2.5 px-4 flex items-center gap-1.5 font-bold"
+                        >
+                          <Upload size={14} />
+                          {qrUploading ? 'Uploading QR...' : 'Save & Publish QR Code'}
+                        </button>
+                      )}
+                      {qrCodeUrl && (
+                        <button
+                          type="button"
+                          onClick={handleQrRemove}
+                          disabled={qrUploading}
+                          className="px-3 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 size={14} /> Remove QR
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Delivery Fee */}
+              <div className="space-y-4 bg-white/5 p-5 sm:p-6 rounded-2xl border border-white/10">
+                <h4 className="text-lg font-bold text-festival-gold flex items-center gap-2">
+                  <Truck size={20} /> Delivery & Shipping Fee
+                </h4>
+                <div className="space-y-1.5">
+                  <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Delivery Fee (₹)</label>
                   <input
                     type="number"
                     value={deliveryFee}
                     onChange={(e) => setDeliveryFee(e.target.value)}
                     className={inputClass}
-                    placeholder="Enter delivery amount e.g. 250"
+                    placeholder="Enter delivery amount e.g. 250 (0 for free delivery)"
                   />
+                  <p className="text-gray-500 text-xs mt-1">This fee is automatically applied to all new orders during checkout.</p>
                 </div>
-                <p className="text-gray-500 text-xs mt-1">This fee will be automatically applied to all new orders during checkout.</p>
               </div>
 
-              <div className="pt-4 border-t border-white/10">
+              {/* Section 4: Cloudinary Permanent Image Storage */}
+              <div className="space-y-4 bg-white/5 p-5 sm:p-6 rounded-2xl border border-white/10">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <h4 className="text-lg font-bold text-festival-gold flex items-center gap-2">
+                    <Cloud size={20} /> Permanent Cloud Image Storage (Cloudinary)
+                  </h4>
+                  {cloudinaryCloudName && cloudinaryApiKey && cloudinaryApiSecret ? (
+                    <span className="text-xs bg-green-500/10 text-green-400 border border-green-500/20 px-2.5 py-1 rounded-full font-semibold flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Cloud Storage Active
+                    </span>
+                  ) : (
+                    <span className="text-xs bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2.5 py-1 rounded-full font-semibold">
+                      Local Storage (Images may reset on host restarts)
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-400 text-xs leading-relaxed">
+                  Enter your free <strong>Cloudinary</strong> credentials below to ensure all uploaded product photos, payment QR codes, and payment proofs are stored <strong>permanently in the cloud</strong> and never disappear when the live GoDaddy server restarts.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">Cloud Name</label>
+                    <input
+                      type="text"
+                      value={cloudinaryCloudName}
+                      onChange={(e) => setCloudinaryCloudName(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. dxyz1234"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">API Key</label>
+                    <input
+                      type="text"
+                      value={cloudinaryApiKey}
+                      onChange={(e) => setCloudinaryApiKey(e.target.value)}
+                      className={inputClass}
+                      placeholder="e.g. 123456789012345"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-gray-300 text-xs font-semibold uppercase tracking-wider">API Secret</label>
+                    <input
+                      type="password"
+                      value={cloudinaryApiSecret}
+                      onChange={(e) => setCloudinaryApiSecret(e.target.value)}
+                      className={inputClass}
+                      placeholder="••••••••••••••••"
+                    />
+                  </div>
+                </div>
+                <p className="text-gray-500 text-[11px]">
+                  Get these free at <a href="https://cloudinary.com" target="_blank" rel="noopener noreferrer" className="text-festival-gold underline">cloudinary.com</a> (Dashboard → Product Environment Credentials).
+                </p>
+              </div>
+
+              <div className="pt-2">
                 <button
                   type="submit"
                   disabled={settingsLoading}
-                  className="btn-primary w-full flex items-center justify-center gap-2"
+                  className="btn-primary w-full py-3.5 text-base flex items-center justify-center gap-2 font-bold shadow-lg"
                 >
-                  {settingsLoading ? 'Saving...' : 'Save Settings'}
+                  {settingsLoading ? 'Saving...' : 'Save & Update All Settings'}
                 </button>
               </div>
             </form>
